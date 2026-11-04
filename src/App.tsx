@@ -22,7 +22,7 @@ import { ApiKeyModal } from './components/ApiKeyModal';
 import { HistoryDrawer } from './components/HistoryDrawer';
 import { BlueprintModal } from './components/BlueprintModal';
 import { RefinerOptions, RefineResult, HistoryItem } from './types';
-import { refinePromptApi, checkServerStatus, getStoredApiKey, resetSessionApi, resetSessionId } from './services/api';
+import { refinePromptApi, checkServerStatus, getStoredApiKey, getProviderApiKey, getActiveProvider, resetSessionApi, resetSessionId } from './services/api';
 
 const HISTORY_STORAGE_KEY = 'prompt_refiner_history_v1';
 const THEME_STORAGE_KEY = 'prompt_refiner_theme';

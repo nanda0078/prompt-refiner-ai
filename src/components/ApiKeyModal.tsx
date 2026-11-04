@@ -1,7 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { X, Key, Eye, EyeOff, CheckCircle2, AlertCircle, Loader2, ShieldCheck, RefreshCw, Trash2, Cpu } from 'lucide-react';
-import { ConnectionTestResult } from '../types';
-import { getStoredApiKey, saveStoredApiKey, clearStoredApiKey, testGeminiConnection, checkServerStatus } from '../services/api';
+import { X, Key, Eye, EyeOff, CheckCircle2, AlertCircle, Loader2, ShieldCheck, RefreshCw, Trash2, Cpu, Sparkles } from 'lucide-react';
+import { ConnectionTestResult, AIProviderId, AI_PROVIDERS, GEMINI_MODEL_OPTIONS } from '../types';
+import {
+  getActiveProvider,
+  setActiveProvider,
+  getProviderApiKey,
+  saveProviderApiKey,
+  clearProviderApiKey,
+  getSelectedGeminiModel,
+  setSelectedGeminiModel,
+  testGeminiConnection,
+  checkServerStatus,
+} from '../services/api';
 
 interface ApiKeyModalProps {
   isOpen: boolean;
@@ -14,6 +24,8 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
   onClose,
   onApiKeyUpdated,
 }) => {
+  const [selectedProvider, setSelectedProvider] = useState<AIProviderId>('gemini-3.8-flash');
+  const [selectedModel, setSelectedModel] = useState<string>('gemini-3.8-flash');
   const [apiKey, setApiKey] = useState('');
   const [showKey, setShowKey] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
@@ -23,7 +35,10 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
 
   useEffect(() => {
     if (isOpen) {
-      setApiKey(getStoredApiKey());
+      const active = getActiveProvider();
+      setSelectedProvider(active);
+      setSelectedModel(getSelectedGeminiModel());
+      setApiKey(getProviderApiKey(active));
       setTestResult(null);
       setSaveSuccess(false);
       checkServerStatus().then((status) => {
@@ -34,15 +49,26 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
 
   if (!isOpen) return null;
 
+  const handleProviderChange = (newProvider: AIProviderId) => {
+    setSelectedProvider(newProvider);
+    setApiKey(getProviderApiKey(newProvider));
+    setTestResult(null);
+    setSaveSuccess(false);
+  };
+
   const handleSave = () => {
-    saveStoredApiKey(apiKey);
+    setActiveProvider(selectedProvider);
+    saveProviderApiKey(selectedProvider, apiKey);
+    if (selectedProvider === 'gemini-3.8-flash') {
+      setSelectedGeminiModel(selectedModel);
+    }
     setSaveSuccess(true);
     onApiKeyUpdated();
     setTimeout(() => setSaveSuccess(false), 2500);
   };
 
   const handleClear = () => {
-    clearStoredApiKey();
+    clearProviderApiKey(selectedProvider);
     setApiKey('');
     setTestResult(null);
     onApiKeyUpdated();
@@ -52,7 +78,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
     setIsTesting(true);
     setTestResult(null);
     try {
-      const result = await testGeminiConnection(apiKey);
+      const result = await testGeminiConnection(apiKey, selectedProvider, selectedModel);
       setTestResult(result);
     } catch (e: any) {
       setTestResult({
@@ -78,7 +104,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
                 Gemini API Key Manager
               </h3>
               <p className="text-xs text-gray-500 dark:text-gray-400">
-                Konfigurasi akses Google Gemini API
+                Konfigurasi AI Engine & Google Gemini API Provider
               </p>
             </div>
           </div>
@@ -92,16 +118,163 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
         </div>
 
         {/* Content */}
-        <div className="p-6 space-y-5">
-          {/* Status Banner */}
+        <div className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+          {/* PROVIDER SELECTION */}
+          <div className="space-y-2">
+            <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300">
+              Pilihan Provider / AI Engine
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              {/* Option 1: Gemini API (gemini-3.8-flash) */}
+              <button
+                type="button"
+                onClick={() => handleProviderChange('gemini-3.8-flash')}
+                className={`p-3 rounded-xl border text-left transition-all relative flex flex-col justify-between cursor-pointer ${
+                  selectedProvider === 'gemini-3.8-flash'
+                    ? 'border-indigo-600 bg-indigo-50/70 dark:bg-indigo-950/40 ring-2 ring-indigo-500/20'
+                    : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/60 hover:bg-gray-50 dark:hover:bg-gray-800'
+                }`}
+              >
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="font-bold text-xs text-gray-900 dark:text-white flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
+                      Gemini API (gemini-3.8-flash)
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-snug">
+                    Google Gemini API langsung menggunakan model gemini-3.8-flash (BYOK).
+                  </p>
+                </div>
+                <div className="mt-2.5 flex items-center justify-between">
+                  <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-cyan-100 dark:bg-cyan-950/70 text-cyan-800 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-800/50">
+                    Default / New
+                  </span>
+                  <div
+                    className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
+                      selectedProvider === 'gemini-3.8-flash'
+                        ? 'border-indigo-600 bg-indigo-600 text-white'
+                        : 'border-gray-300 dark:border-gray-600'
+                    }`}
+                  >
+                    {selectedProvider === 'gemini-3.8-flash' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                  </div>
+                </div>
+              </button>
+
+              {/* Option 2: Engine AI Studio PCTCE+O */}
+              <button
+                type="button"
+                onClick={() => handleProviderChange('pctce-o-studio')}
+                className={`p-3 rounded-xl border text-left transition-all relative flex flex-col justify-between cursor-pointer ${
+                  selectedProvider === 'pctce-o-studio'
+                    ? 'border-indigo-600 bg-indigo-50/70 dark:bg-indigo-950/40 ring-2 ring-indigo-500/20'
+                    : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/60 hover:bg-gray-50 dark:hover:bg-gray-800'
+                }`}
+              >
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="font-bold text-xs text-gray-900 dark:text-white flex items-center gap-1.5">
+                      <Cpu className="w-3.5 h-3.5 text-violet-500" />
+                      Engine AI Studio PCTCE+O
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-snug">
+                    Engine sintesis prompt PCTCE+O terstandar dengan alur kerja Lyra 4D.
+                  </p>
+                </div>
+                <div className="mt-2.5 flex items-center justify-between">
+                  <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-violet-100 dark:bg-violet-950/70 text-violet-800 dark:text-violet-300 border border-violet-200 dark:border-violet-800/50">
+                    Standard / Fallback
+                  </span>
+                  <div
+                    className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
+                      selectedProvider === 'pctce-o-studio'
+                        ? 'border-indigo-600 bg-indigo-600 text-white'
+                        : 'border-gray-300 dark:border-gray-600'
+                    }`}
+                  >
+                    {selectedProvider === 'pctce-o-studio' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                  </div>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          {/* GEMINI MODEL SELECTOR (Visible when Gemini API is selected) */}
+          {selectedProvider === 'gemini-3.8-flash' && (
+            <div className="space-y-2 p-3.5 rounded-xl bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-200/70 dark:border-indigo-900/50">
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-bold uppercase tracking-wider text-indigo-900 dark:text-indigo-200">
+                  Pilihan Model Gemini
+                </label>
+                <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-md bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                  Model: {selectedModel}
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {GEMINI_MODEL_OPTIONS.map((opt) => {
+                  const isSelected = selectedModel === opt.id;
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => setSelectedModel(opt.id)}
+                      className={`p-2.5 rounded-xl border text-left transition-all flex flex-col justify-between cursor-pointer ${
+                        isSelected
+                          ? 'border-indigo-600 bg-white dark:bg-gray-800 ring-2 ring-indigo-500/25 shadow-xs'
+                          : 'border-gray-200 dark:border-gray-700 bg-white/60 dark:bg-gray-800/40 hover:bg-white dark:hover:bg-gray-800'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-bold text-gray-900 dark:text-white">
+                          {opt.name}
+                        </span>
+                        {opt.badge && (
+                          <span
+                            className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${
+                              opt.id === 'gemini-3.8-flash'
+                                ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60'
+                                : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+                            }`}
+                          >
+                            {opt.badge}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-snug">
+                        {opt.description}
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Dynamic Status Banner based on selected provider */}
           <div className="p-3.5 rounded-xl border bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700/60 flex items-start gap-3">
             <Cpu className="w-5 h-5 text-indigo-500 shrink-0 mt-0.5" />
             <div className="text-xs text-gray-600 dark:text-gray-300 space-y-1">
               <div className="flex items-center gap-2">
                 <span className="font-semibold text-gray-900 dark:text-white">
-                  Status Server AI Studio:
+                  {selectedProvider === 'gemini-3.8-flash'
+                    ? 'Status Gemini 3.8 Flash:'
+                    : 'Status Engine AI Studio PCTCE+O:'}
                 </span>
-                {serverHasKey ? (
+                {selectedProvider === 'gemini-3.8-flash' ? (
+                  apiKey ? (
+                    <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-medium bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800/50">
+                      <CheckCircle2 className="w-3 h-3" />
+                      BYOK Siap Digunakan
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400 font-medium bg-amber-50 dark:bg-amber-950/50 px-2 py-0.5 rounded-full border border-amber-200 dark:border-amber-800/50">
+                      <AlertCircle className="w-3 h-3" />
+                      Memerlukan API Key
+                    </span>
+                  )
+                ) : serverHasKey ? (
                   <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-medium bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800/50">
                     <CheckCircle2 className="w-3 h-3" />
                     Environment Key Aktif
@@ -114,9 +287,11 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
                 )}
               </div>
               <p className="text-[11px] text-gray-500 dark:text-gray-400">
-                {serverHasKey
-                  ? 'Gemini API Key server terdeteksi aktif. Anda bisa langsung menggunakannya, atau memasukkan kunci kustom di bawah ini jika ingin menimpanya.'
-                  : 'Aplikasi dilengkapi Engine Algoritmik PCTCE+O lokal siap pakai (bebas kuota). Jika ingin menggunakan Google Gemini Cloud AI secara langsung, masukkan Gemini API Key Anda di bawah ini.'}
+                {selectedProvider === 'gemini-3.8-flash'
+                  ? 'Model gemini-3.8-flash terhubung langsung ke Google Cloud AI. Masukkan Gemini API Key pribadi (BYOK) untuk aktivasi.'
+                  : serverHasKey
+                  ? 'Gemini API Key server terdeteksi aktif. Anda bisa langsung menggunakannya atau memasukkan kunci kustom jika ingin menimpanya.'
+                  : 'Engine PCTCE+O lokal siap pakai (bebas kuota). Jika ingin menggunakan server eksternal, masukkan API Key Anda di bawah ini.'}
               </p>
             </div>
           </div>
@@ -124,7 +299,9 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
           {/* Input Field */}
           <div className="space-y-1.5">
             <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300">
-              KUNCI API GEMINI KUSTOM (OPSIONAL)
+              {selectedProvider === 'gemini-3.8-flash'
+                ? 'GOOGLE GEMINI API KEY (BYOK UNTUK GEMINI-3.8-FLASH)'
+                : 'KUNCI API AI STUDIO KUSTOM (OPSIONAL)'}
             </label>
             <div className="relative">
               <input
@@ -138,7 +315,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setShowKey(!showKey)}
-                  className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+                  className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer"
                   title={showKey ? 'Sembunyikan' : 'Tampilkan'}
                 >
                   {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -147,7 +324,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
                   <button
                     type="button"
                     onClick={handleClear}
-                    className="p-1.5 text-red-400 hover:text-red-600 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/30"
+                    className="p-1.5 text-red-400 hover:text-red-600 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/30 cursor-pointer"
                     title="Hapus Kunci"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -156,7 +333,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
               </div>
             </div>
             <p className="text-[11px] text-gray-500 dark:text-gray-400">
-              Dapatkan API Key gratis di{' '}
+              Dapatkan API Key resmi gratis di{' '}
               <a
                 href="https://aistudio.google.com/apikey"
                 target="_blank"
@@ -187,7 +364,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
                 <p className="font-semibold">{testResult.message}</p>
                 {testResult.latency !== undefined && (
                   <p className="text-[11px] opacity-80 mt-0.5">
-                    Model: gemini-3.8-flash • Waktu respon: {testResult.latency}ms
+                    Provider: {selectedProvider === 'gemini-3.8-flash' ? `Gemini API (${selectedModel})` : 'Engine AI Studio PCTCE+O'} • Waktu respon: {testResult.latency}ms
                   </p>
                 )}
               </div>
@@ -197,7 +374,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
           {saveSuccess && (
             <div className="p-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 text-xs flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4" />
-              Kunci API berhasil disimpan!
+              Konfigurasi Provider & Kunci API berhasil disimpan!
             </div>
           )}
 
@@ -205,8 +382,8 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
           <div className="p-3 rounded-xl bg-blue-50/60 dark:bg-blue-950/30 border border-blue-200/60 dark:border-blue-900/40 flex items-start gap-2.5">
             <ShieldCheck className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
             <div className="text-[11px] text-blue-900 dark:text-blue-200 space-y-1 leading-relaxed">
-              <span className="font-semibold block">Keamanan & Privasi Kunci API:</span>
-              Kunci API kustom disimpan secara privat di penyimpanan lokal browser Anda (LocalStorage) dan hanya dikirim via header aman ke server proxy aplikasi ini. Kunci tidak pernah dibagikan ke pihak ketiga atau dicatat ke log publik.
+              <span className="font-semibold block">Isolasi & Keamanan Kunci Provider:</span>
+              Kunci API masing-masing provider disimpan di slot terisolasi pada penyimpanan lokal browser Anda (LocalStorage). Berganti provider tidak akan menghapus atau mencampur kunci antar-provider.
             </div>
           </div>
         </div>
@@ -217,7 +394,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
             onClick={handleTestConnection}
             disabled={isTesting}
             type="button"
-            className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 border border-gray-300 dark:border-gray-600 rounded-xl transition-all disabled:opacity-50"
+            className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 border border-gray-300 dark:border-gray-600 rounded-xl transition-all disabled:opacity-50 cursor-pointer"
           >
             {isTesting ? (
               <>
@@ -236,14 +413,14 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
             <button
               onClick={onClose}
               type="button"
-              className="px-4 py-2 text-xs font-medium text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
+              className="px-4 py-2 text-xs font-medium text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors cursor-pointer"
             >
               Tutup
             </button>
             <button
               onClick={handleSave}
               type="button"
-              className="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-sm transition-all"
+              className="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-sm transition-all cursor-pointer"
             >
               Simpan
             </button>

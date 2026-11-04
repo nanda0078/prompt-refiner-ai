@@ -52,7 +52,12 @@ app.get('/api/status', (req, res) => {
   res.json({
     status: 'ok',
     hasEnvKey,
-    model: 'gemini-2.5-flash',
+    activeDefaultProvider: 'gemini-3.8-flash',
+    supportedProviders: [
+      { id: 'gemini-3.8-flash', name: 'Gemini API (gemini-3.8-flash)', model: 'gemini-3.8-flash' },
+      { id: 'pctce-o-studio', name: 'Engine AI Studio PCTCE+O', model: 'pctce-o-studio' }
+    ],
+    model: 'gemini-3.8-flash',
     version: '1.0.0',
   });
 });
@@ -83,6 +88,7 @@ async function generateContentWithRetry(
 ) {
   const candidateModels = [
     params.model,
+    'gemini-3.8-flash',
     'gemini-2.5-flash',
     'gemini-2.0-flash',
     'gemini-1.5-flash',
@@ -145,6 +151,9 @@ async function generateContentWithRetry(
 app.post('/api/test-connection', async (req, res) => {
   try {
     const customKey = (req.headers['x-gemini-api-key'] as string) || req.body?.apiKey;
+    const provider = (req.headers['x-ai-provider'] as string) || req.body?.provider || 'gemini-3.8-flash';
+    const targetModel = (req.headers['x-gemini-model'] as string) || req.body?.model || (provider === 'gemini-3.8-flash' ? 'gemini-3.8-flash' : 'gemini-2.5-flash');
+
     const ai = getGeminiClient(customKey);
 
     if (!ai) {
@@ -156,20 +165,22 @@ app.post('/api/test-connection', async (req, res) => {
 
     const startTime = Date.now();
     const { response, usedModel } = await generateContentWithRetry(ai, {
-      model: 'gemini-2.5-flash',
+      model: targetModel,
       contents: 'Ping test. Reply with: OK',
     });
 
     const latency = Date.now() - startTime;
     const reply = response.text || '';
+    const providerDisplayName = provider === 'gemini-3.8-flash' ? 'Gemini API (gemini-3.8-flash)' : 'Engine AI Studio PCTCE+O';
 
     res.json({
       success: true,
       latency,
       reply: reply.trim(),
       model: usedModel,
+      provider,
       usingCustomKey: !!customKey,
-      message: `Koneksi ke Gemini API (${usedModel}) berhasil terverifikasi dalam ${latency}ms!`,
+      message: `Koneksi ke ${providerDisplayName} (${usedModel}) berhasil terverifikasi dalam ${latency}ms!`,
     });
   } catch (err: any) {
     const errorMsg = err?.message || 'Gagal terhubung ke Gemini API';
@@ -455,6 +466,8 @@ app.post('/api/refine', async (req, res) => {
     console.log(`[API /api/refine] [Session: ${sessionId}] Processing fresh isolated request: "${prompt.slice(0, 40)}..." | Target: ${targetAI} | Mode: ${mode}`);
 
     const customKey = (req.headers['x-gemini-api-key'] as string) || req.body?.apiKey;
+    const provider = (req.headers['x-ai-provider'] as string) || req.body?.provider || 'gemini-3.8-flash';
+    const requestedModel = (req.headers['x-gemini-model'] as string) || req.body?.model || (provider === 'gemini-3.8-flash' ? 'gemini-3.8-flash' : 'gemini-2.5-flash');
     const ai = getGeminiClient(customKey);
 
     let rawMarkdown = '';
@@ -507,7 +520,7 @@ ${prompt}
 Please execute the Lyra 4D workflow and PCTCE+O framework to produce the final refined master prompt. Follow the strict four-section markdown format.`;
 
         const { response, usedModel: modelName } = await generateContentWithRetry(ai, {
-          model: 'gemini-2.5-flash',
+          model: requestedModel,
           contents: [
             {
               role: 'user',
@@ -523,19 +536,19 @@ Please execute the Lyra 4D workflow and PCTCE+O framework to produce the final r
         });
 
         rawMarkdown = response.text || '';
-        usedModel = modelName;
+        usedModel = provider === 'gemini-3.8-flash' ? `Gemini API (${modelName})` : `Engine AI Studio PCTCE+O (${modelName})`;
       } catch (geminiError: any) {
         console.warn('[API /api/refine] Gemini API unavailable or timed out. Seamlessly engaging local PCTCE+O engine:', geminiError?.message);
         const fallback = generateLocalPctceRefinement(prompt, targetAI, mode, outputLang, promptStyle, customStyle);
         rawMarkdown = fallback.rawMarkdown;
-        usedModel = 'PCTCE+O Engine (Local Fallback)';
+        usedModel = provider === 'gemini-3.8-flash' ? 'Gemini API (gemini-3.8-flash) [Local PCTCE+O Fallback]' : 'Engine AI Studio PCTCE+O';
       }
     } else {
       // No external API key: instantly use built-in local engine
       console.log('[API /api/refine] Operating in zero-latency mode via built-in PCTCE+O engine.');
       const fallback = generateLocalPctceRefinement(prompt, targetAI, mode, outputLang, promptStyle, customStyle);
       rawMarkdown = fallback.rawMarkdown;
-      usedModel = 'PCTCE+O Engine (Built-in)';
+      usedModel = provider === 'gemini-3.8-flash' ? 'Gemini API (gemini-3.8-flash) [Local PCTCE+O Fallback]' : 'Engine AI Studio PCTCE+O';
     }
 
     const parsed = parseRefinerResponse(rawMarkdown);

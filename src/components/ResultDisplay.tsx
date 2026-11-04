@@ -249,7 +249,7 @@ ${result.improvementQuestions.map((q, i) => `${i + 1}. ${q}`).join('\n')}
           </div>
         </div>
         <div className="text-right text-[11px] text-gray-500 dark:text-gray-400 hidden sm:block">
-          <span>Formula: PCTCE+O</span> • <span>Engine: Gemini 3.8</span>
+          <span>Formula: PCTCE+O</span> • <span>Engine: {result.engineUsed || 'Gemini API (gemini-3.8-flash)'}</span>
         </div>
       </div>
 
