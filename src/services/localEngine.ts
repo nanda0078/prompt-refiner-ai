@@ -3,10 +3,10 @@
 
 export function generateClientPctceRefinement(
   rawPrompt: string,
-  targetAI: string,
-  mode: string,
-  outputLang: string,
-  promptStyle: string,
+  targetAI: string = 'ChatGPT',
+  mode: string = 'Advanced Refine',
+  outputLang: string = 'English',
+  promptStyle: string = 'Image Generation',
   customStyle?: string
 ): {
   rawMarkdown: string;
@@ -219,10 +219,10 @@ ${improvementQuestions.map((q, idx) => `${idx + 1}. ${q}`).join('\n')}`;
 export function generateClientAdvancedRefinement(
   optimizedPrompt: string,
   originalPrompt: string = '',
-  targetAI: string = 'Auto Detect',
+  targetAI: string = 'ChatGPT',
   mode: string = 'Advanced Refine',
-  outputLang: string = 'Indonesia',
-  promptStyle: string = 'General Assistant',
+  outputLang: string = 'English',
+  promptStyle: string = 'Image Generation',
   customStyle?: string
 ): { refinedPrompt: string; engineUsed: string } {
   const isId = outputLang === 'Indonesia' || outputLang === 'Auto Detect';

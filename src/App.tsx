@@ -27,6 +27,14 @@ import { refinePromptApi, checkServerStatus, getStoredApiKey, getProviderApiKey,
 const HISTORY_STORAGE_KEY = 'prompt_refiner_history_v1';
 const THEME_STORAGE_KEY = 'prompt_refiner_theme';
 
+export const DEFAULT_OPTIONS: RefinerOptions = {
+  targetAI: 'ChatGPT',
+  mode: 'Advanced Refine',
+  outputLang: 'English',
+  promptStyle: 'Image Generation',
+  customStyle: '',
+};
+
 export default function App() {
   // Theme state
   const [darkMode, setDarkMode] = useState<boolean>(() => {
@@ -42,13 +50,7 @@ export default function App() {
   // Prompt input and settings state
   const [rawPrompt, setRawPrompt] = useState<string>('');
   const [selectedImages, setSelectedImages] = useState<ImageAttachment[]>([]);
-  const [options, setOptions] = useState<RefinerOptions>({
-    targetAI: 'Auto Detect',
-    mode: 'Advanced Refine',
-    outputLang: 'Indonesia',
-    promptStyle: 'General Assistant',
-    customStyle: '',
-  });
+  const [options, setOptions] = useState<RefinerOptions>(DEFAULT_OPTIONS);
 
   // Loading and workflow states
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -216,9 +218,11 @@ export default function App() {
     setLoadingStep('');
     setErrorMessage(null);
 
-    // 2. Clear prompt input and current result
+    // 2. Clear prompt input, current result, and reset settings to default
     setRawPrompt('');
     setCurrentResult(null);
+    setSelectedImages([]);
+    setOptions(DEFAULT_OPTIONS);
 
     // 3. Purge transient session cache and drafts
     try {

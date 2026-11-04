@@ -322,10 +322,10 @@ function parseRefinerResponse(raw: string) {
  */
 function generateLocalPctceRefinement(
   rawPrompt: string,
-  targetAI: string,
-  mode: string,
-  outputLang: string,
-  promptStyle: string,
+  targetAI: string = 'ChatGPT',
+  mode: string = 'Advanced Refine',
+  outputLang: string = 'English',
+  promptStyle: string = 'Image Generation',
   customStyle?: string
 ): { rawMarkdown: string } {
   const isId = outputLang === 'Indonesia' || outputLang === 'Auto Detect';
@@ -512,10 +512,10 @@ app.post('/api/refine', async (req, res) => {
   try {
     const {
       prompt,
-      targetAI = 'Auto Detect',
+      targetAI = 'ChatGPT',
       mode = 'Advanced Refine',
-      outputLang = 'Indonesia',
-      promptStyle = 'General Assistant',
+      outputLang = 'English',
+      promptStyle = 'Image Generation',
       customStyle = '',
     } = req.body;
 
@@ -692,10 +692,10 @@ Please execute the Lyra 4D workflow and PCTCE+O framework to produce the final r
 function generateServerLocalAdvancedRefinement(
   optimizedPrompt: string,
   originalPrompt: string = '',
-  targetAI: string = 'Auto Detect',
+  targetAI: string = 'ChatGPT',
   mode: string = 'Advanced Refine',
-  outputLang: string = 'Indonesia',
-  promptStyle: string = 'General Assistant',
+  outputLang: string = 'English',
+  promptStyle: string = 'Image Generation',
   customStyle?: string
 ): { refinedPrompt: string; engineUsed: string } {
   const isId = outputLang === 'Indonesia' || outputLang === 'Auto Detect';
@@ -1328,10 +1328,10 @@ app.post('/api/advanced-refine', async (req, res) => {
     const {
       optimizedPrompt,
       originalPrompt = '',
-      targetAI = 'Auto Detect',
+      targetAI = 'ChatGPT',
       mode = 'Advanced Refine',
-      outputLang = 'Indonesia',
-      promptStyle = 'General Assistant',
+      outputLang = 'English',
+      promptStyle = 'Image Generation',
       customStyle = '',
       images = [],
     } = req.body;
