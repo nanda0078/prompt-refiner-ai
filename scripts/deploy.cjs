@@ -39,36 +39,50 @@ console.log('\n[3/5] Switching to branch gh-pages...');
 try {
   execSync('git checkout gh-pages', { cwd: rootDir, stdio: 'inherit' });
 } catch {
-  console.log('[Deploy] Branch gh-pages not found, creating orphan branch...');
-  execSync('git checkout --orphan gh-pages', { cwd: rootDir, stdio: 'inherit' });
-  execSync('git rm -rf .', { cwd: rootDir, stdio: 'inherit' });
+  console.log('[Deploy] Creating branch gh-pages from current commit...');
+  execSync('git checkout -b gh-pages', { cwd: rootDir, stdio: 'inherit' });
 }
 
-// 4. Copy files from backup to root of gh-pages
-console.log('\n[4/5] Copying web assets to gh-pages branch...');
+// 4. Copy files from backup to root
+console.log('\n[4/5] Copying web distribution assets into gh-pages...');
 fs.cpSync(backupDir, rootDir, { recursive: true });
 
-// 5. Stage, commit, and push
-console.log('\n[5/5] Committing and pushing to origin gh-pages...');
-execSync('git add -A', { cwd: rootDir, stdio: 'inherit' });
+// 5. Staging only distribution files
+console.log('\n[5/5] Staging distribution files...');
+const filesToStage = [
+  'index.html',
+  '404.html',
+  '.nojekyll',
+  'assets',
+  'apk',
+  'server.js',
+];
+
+for (const file of filesToStage) {
+  if (fs.existsSync(path.join(rootDir, file))) {
+    execSync(`git add "${file}"`, { cwd: rootDir, stdio: 'inherit' });
+  }
+}
 
 try {
-  execSync('git commit -m "deploy: publish PROMPT REFINER AI final release to GitHub Pages"', {
+  execSync('git commit -m "deploy: update gh-pages with final release"', {
     cwd: rootDir,
     stdio: 'inherit',
   });
-} catch (e) {
+  console.log('[Deploy] Successfully committed gh-pages assets.');
+} catch (err) {
   console.log('[Deploy] No new changes to commit on gh-pages.');
 }
 
 try {
-  execSync('git push -u origin gh-pages --force', { cwd: rootDir, stdio: 'inherit' });
+  console.log('[Deploy] Attempting push to origin gh-pages...');
+  execSync('git push origin gh-pages', { cwd: rootDir, stdio: 'inherit' });
   console.log('\n========================================');
   console.log('[Deploy] GitHub Pages PUSH SUCCESSFUL!');
   console.log('========================================\n');
 } catch (err) {
-  console.warn('[Deploy] Push to remote origin gh-pages failed or remote not configured yet:', err.message);
+  console.log('[Deploy] Push to remote origin gh-pages skipped or pending remote repository:', err.message);
 } finally {
-  console.log('[Deploy] Switching back to branch main...');
+  console.log('[Deploy] Switching back to main...');
   execSync('git checkout main', { cwd: rootDir, stdio: 'inherit' });
 }
