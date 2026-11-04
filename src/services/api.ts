@@ -1,5 +1,5 @@
 import { ConnectionTestResult, RefineResult, RefinerOptions, AIProviderId, GEMINI_CONFIG } from '../types';
-import { generateClientPctceRefinement } from './localEngine';
+import { generateClientPctceRefinement, generateClientAdvancedRefinement } from './localEngine';
 
 const SELECTED_PROVIDER_STORAGE_KEY = 'prompt_refiner_selected_provider';
 const GEMINI_38_API_KEY_STORAGE_KEY = 'prompt_refiner_user_gemini_api_key';
@@ -508,5 +508,149 @@ ${options.targetAI} - ${options.promptStyle} (${options.mode})
       originalPrompt: prompt,
       options,
     };
+  }
+}
+
+
+/**
+ * Advanced Final Refinement API
+ * Executes secondary high-precision refinement on top of Optimized Request.
+ * Independent execution: Failure will NEVER affect Optimized Request.
+ */
+export async function advancedRefinePromptApi(
+  optimizedPrompt: string,
+  originalPrompt: string = '',
+  options: RefinerOptions
+): Promise<{
+  refinedPrompt: string;
+  engineUsed: string;
+}> {
+  const activeProvider = getActiveProvider();
+  const customKey = getProviderApiKey(activeProvider);
+  const targetModel = activeProvider === 'gemini-3.8-flash' ? getSelectedGeminiModel() : GEMINI_CONFIG.model;
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'x-session-id': currentSessionId,
+    'x-ai-provider': activeProvider,
+    'x-gemini-model': targetModel,
+  };
+
+  if (customKey) {
+    headers['x-gemini-api-key'] = customKey;
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+  try {
+    const res = await fetch('/api/advanced-refine', {
+      method: 'POST',
+      headers,
+      signal: controller.signal,
+      body: JSON.stringify({
+        sessionId: currentSessionId,
+        provider: activeProvider,
+        model: targetModel,
+        optimizedPrompt,
+        originalPrompt,
+        targetAI: options.targetAI,
+        mode: options.mode,
+        outputLang: options.outputLang,
+        promptStyle: options.promptStyle,
+        customStyle: options.customStyle,
+        images: options.images,
+      }),
+    });
+
+    clearTimeout(timeoutId);
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.message || data.error || 'Gagal menjalankan Advanced Final Refinement.');
+    }
+
+    return {
+      refinedPrompt: data.refinedPrompt || '',
+      engineUsed: data.engineUsed || (activeProvider === 'gemini-3.8-flash' ? `Gemini API (${targetModel})` : 'Engine AI Studio PCTCE+O'),
+    };
+  } catch (err: any) {
+    clearTimeout(timeoutId);
+    console.warn('[API] Server /api/advanced-refine unavailable, engaging client fallback:', err?.message);
+
+    // Direct Gemini API call if custom key exists (for GitHub Pages / mobile)
+    if (activeProvider === 'gemini-3.8-flash' && customKey && customKey.length > 15) {
+      try {
+        const directSystemPrompt = `You are an Elite Principal Prompt Architect and Master Refinement Specialist.
+Your mission is to perform ADVANCED FINAL REFINEMENT on an existing Optimized Request to produce a definitive, production-grade master instruction.
+
+CORE REFINEMENT PRINCIPLES:
+1. INTENT PRESERVATION: Faithfully preserve the user's primary objectives, requirements, and constraints.
+2. CONTEXT VALIDATION: Ensure all parameters are consistent with the current task. Remove any cross-task bleed or irrelevant historical assumptions.
+3. DETAIL ENRICHMENT: Elevate operational depth, technical parameters, and specific execution details without fluff.
+4. STRUCTURAL OPTIMIZATION: Structure into clear, hierarchical, systematic markdown blocks optimized for target AI execution.
+5. CONFLICT RESOLUTION: Resolve ambiguities or contradictory clauses logically without deviating from core intent.
+6. COMPLETENESS VALIDATION: Ensure no required specifications were omitted.
+7. EXECUTION PRECISION: High signal-to-noise ratio, zero pleasantries. Every sentence must be an actionable constraint or directive.
+8. UNIVERSAL ADAPTIVE REFINEMENT: Adapt your refinement criteria to the specific domain.
+
+STRICT OUTPUT REQUIREMENT:
+Return ONLY the clean, final, ready-to-run refined master prompt text. No preamble or conversational filler.`;
+
+        const parts: any[] = [];
+        if (options.images && options.images.length > 0) {
+          for (const img of options.images) {
+            if (img.base64Data && img.mimeType) {
+              parts.push({
+                inline_data: {
+                  mime_type: img.mimeType,
+                  data: img.base64Data,
+                },
+              });
+            }
+          }
+        }
+        parts.push({
+          text: `${directSystemPrompt}\n\nOPTIMIZED REQUEST TO REFINE:\n"""\n${optimizedPrompt}\n"""\n\nORIGINAL USER GOAL:\n"""\n${originalPrompt}\n"""`,
+        });
+
+        const directRes = await fetch(
+          `https://generativelanguage.googleapis.com/${GEMINI_CONFIG.apiVersion}/models/${targetModel}:generateContent?key=${customKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ role: 'user', parts }],
+            }),
+          }
+        );
+
+        if (directRes.ok) {
+          const directData = await directRes.json();
+          const rawText = directData?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+          if (rawText) {
+            return {
+              refinedPrompt: rawText.trim(),
+              engineUsed: `Gemini API (${targetModel}) [Direct]`,
+            };
+          }
+        }
+      } catch (directErr) {
+        console.warn('Direct Gemini call fallback error:', directErr);
+      }
+    }
+
+    // Pure local algorithmic fallback
+    const fallback = generateClientAdvancedRefinement(
+      optimizedPrompt,
+      originalPrompt,
+      options.targetAI,
+      options.mode,
+      options.outputLang,
+      options.promptStyle,
+      options.customStyle
+    );
+
+    return fallback;
   }
 }

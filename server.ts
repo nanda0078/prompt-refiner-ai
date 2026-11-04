@@ -672,6 +672,255 @@ Please execute the Lyra 4D workflow and PCTCE+O framework to produce the final r
   }
 });
 
+
+// Universal Adaptive Advanced Refinement Helper for Server
+function generateServerLocalAdvancedRefinement(
+  optimizedPrompt: string,
+  originalPrompt: string = '',
+  targetAI: string = 'Auto Detect',
+  mode: string = 'Advanced Refine',
+  outputLang: string = 'Indonesia',
+  promptStyle: string = 'General Assistant',
+  customStyle?: string
+): { refinedPrompt: string; engineUsed: string } {
+  const isId = outputLang === 'Indonesia' || outputLang === 'Auto Detect';
+  const cleanBase = optimizedPrompt.trim();
+  const lowerBase = (cleanBase + ' ' + (originalPrompt || '')).toLowerCase();
+
+  const isVisual = promptStyle === 'Image Generation' || lowerBase.includes('gambar') || lowerBase.includes('foto') || lowerBase.includes('portrait') || lowerBase.includes('visual');
+  const isCode = promptStyle === 'Coding & Development' || lowerBase.includes('kode') || lowerBase.includes('aplikasi') || lowerBase.includes('react') || lowerBase.includes('bug');
+  const isWriting = promptStyle === 'Writing & Content' || lowerBase.includes('artikel') || lowerBase.includes('naskah') || lowerBase.includes('cerita');
+  const isMarketing = promptStyle === 'Business & Marketing' || lowerBase.includes('iklan') || lowerBase.includes('promosi') || lowerBase.includes('marketing');
+  const isData = promptStyle === 'Data Analysis' || lowerBase.includes('data') || lowerBase.includes('analisis');
+
+  let specializedEnrichment = '';
+  if (isVisual) {
+    specializedEnrichment = isId
+      ? `### 📐 SPESIFIKASI VISUAL & OPTIK TINGKAT LANJUT
+- Rasio Aspek (Aspect Ratio): Terkalibrasi 16:9 sinematik atau 9:16 potret resolusi ultra-tinggi (8K UHD).
+- Lensa & Optik: 85mm f/1.4 prime lens, shallow depth-of-field, aperture lembut dengan efek bokeh melingkar halus pada latar belakang.
+- Pencahayaan (Lighting Science): Kombinasi three-point studio lighting dengan Rembrandt key light, subtle rim light pada kontur subjek, dan soft volumetric fill light.
+- Tekstur & Materialitas: Detail mikro tekstur kulit natural dengan subsurface scattering nyata (tanpa efek plastik atau airbrushed), helai rambut tajam, dan kejernihan mata dengan tangkapan cahaya (catchlight) natural.
+- Color Grading & Mood: Palet warna sinematik terkalibrasi kodachrome 64/cinestill 800T, dynamic range luas, bayangan bersih tanpa noise digital.
+- Pagar Pembatas Negatif (Negative Guardrails): Zero-distortion, no mutated limbs, no extra fingers, no blurry artifacts, no watermark, no CGI/plastic glossiness.`
+      : `### 📐 ADVANCED OPTICAL & VISUAL SPECIFICATIONS
+- Aspect Ratio: Native 16:9 cinematic or 9:16 portrait composition, 8K ultra-sharp fidelity.
+- Optics & Focal Length: 85mm f/1.4 prime lens, shallow depth-of-field, organic circular bokeh on background highlights.
+- Lighting Science: Balanced three-point illumination, Rembrandt key light, delicate hair rim light, soft ambient fill.
+- Materiality & Texture: Natural skin micro-texture with authentic subsurface scattering (zero plastic airbrushing), realistic iris catchlight, and textile micro-weave.
+- Color Science: Film-stock emulation (Kodachrome 64/Cinestill 800T), extended dynamic range, clean deep blacks.
+- Negative Guardrails: Zero anatomical distortion, no unnatural limb multiplication, no watermarks, no blur artifacts.`;
+  } else if (isCode) {
+    specializedEnrichment = isId
+      ? `### 🛡️ KONTRAK REKAYASA & PREVENTIF EDGE-CASE
+- Integritas Arsitektur: Pola pemisahan tanggung jawab (Separation of Concerns), modularitas komponen, dan type-safe end-to-end.
+- Penanganan Kondisi Batas (Edge Cases): Validasi input defensif (null/undefined/empty state), error boundary terisolasi, dan status loading/retry yang jelas.
+- Standar Eksekusi: Clean Code, fungsi murni (pure functions) di mana memungkinkan, nama variabel deskriptif tanpa singkatan ambigu.
+- Kriteria Verifikasi: Kode harus dapat dikompilasi tanpa peringatan (zero warnings), lulus verifikasi tipe statis, dan menyertakan contoh penggunaan nyata.`
+      : `### 🛡️ ENGINEERING CONTRACT & DEFENSIVE INVARIANTS
+- Architecture Integrity: Strict separation of concerns, high cohesion, end-to-end type safety.
+- Edge-Case Resilience: Defensive validation against null/undefined/empty bounds, explicit error recovery, and robust status management.
+- Execution Quality: Clean Code conventions, pure deterministic functions, and production-grade maintainability.
+- Verification Gate: Zero build warnings, complete type coverage, and actionable executable snippets.`;
+  } else if (isWriting) {
+    specializedEnrichment = isId
+      ? `### ✍️ KONTROL NARASI & ENGAGEMENT
+- Arsitektur Narasi: Hook awal berdaya pikat tinggi -> Eskalasi pemikiran terstruktur -> Pembahasan mendalam berbobot -> Konklusi berdampak kuat.
+- Dinamika Gaya: Kalimat bervariasi (rhythm & cadence), eliminasi frasa klise, dan pemilihan diksi yang bernas.
+- Retensi Pembaca: Pertahankan alur logis yang mulus antar-paragraf dengan transisi alami.`
+      : `### ✍️ NARRATIVE ARCHITECTURE & ENGAGEMENT
+- Structural Flow: High-impact opening hook -> Systematic thematic development -> Deep intellectual value -> Resonant takeaway.
+- Pacing & Rhythm: Alternating sentence lengths, active voice dominance, and zero repetitive filler.
+- Reader Retention: Seamless logical transitions and emotional resonance.`;
+  } else if (isMarketing) {
+    specializedEnrichment = isId
+      ? `### 🎯 STRATEGI KONVERSI & VALUE PROPOSITION
+- Core Hook: Menjawab langsung titik sakit (pain-point) utama audiens dalam 3 detik pertama.
+- Diferensiasi Tajam: Buktikan nilai unik tanpa klaim berlebihan (evidence-backed credibility).
+- Call-to-Action (CTA): Instruksi tindakan tunggal, jelas, mendesak, dan minim friksi.`
+      : `### 🎯 CONVERSION CATALYST & VALUE PROPOSITION
+- Core Hook: Immediately resolves the user's primary friction point in the opening statement.
+- Sharp Differentiation: Concrete value positioning supported by credible evidence.
+- Frictionless CTA: Single, clear, unambiguous directive maximizing execution velocity.`;
+  } else if (isData) {
+    specializedEnrichment = isId
+      ? `### 📊 FRAMEWORK ANALITIK & KAUSALITAS
+- Taksonomi Metrik: Klasifikasi variabel primer, sekunder, dan variabel pengendali.
+- Identifikasi Tren: Pisahkan anomali sementara dari pola kausal yang terbukti.
+- Rekomendasi Eksekutif: Simpulan actionable dengan pembobotan prioritas berbasis dampak.`
+      : `### 📊 ANALYTICAL DECOMPOSITION & CAUSALITY
+- Metric Taxonomy: Clear segregation of primary KPIs, control variables, and secondary indicators.
+- Causal Rigor: Isolate transient noise from genuine behavioral shifts.
+- Executive Decision Matrix: Actionable takeaways ranked strictly by business impact.`;
+  } else {
+    specializedEnrichment = isId
+      ? `### ⚡ PROTOKOL PRESISI EKSEKUSI
+- Dekomposisi Sistematis: Eksekusi setiap tahapan secara hierarkis dan deterministik.
+- Eliminasi Ambiguitas: Semua parameter memiliki batasan operasional yang jelas tanpa ruang interpretasi ganda.
+- Verifikasi Akhir: Hasil wajib memenuhi seluruh kriteria kelengkapan fungsional.`
+      : `### ⚡ DETERMINISTIC EXECUTION PROTOCOL
+- Systematic Decomposition: Hierarchical, stepwise instruction execution.
+- Zero-Ambiguity Guardrail: All operational boundaries explicitly defined.
+- Verification Criteria: Output strictly evaluated against end-to-end completeness.`;
+  }
+
+  const refinedPrompt = `# ADVANCED FINAL REFINEMENT: DEFINITIVE MASTER SPECIFICATION
+[CONFIRMED OBJECTIVE]: ${cleanBase.split('\n')[0].replace(/^[#\s*]+/, '') || 'High-Precision Task Execution'}
+
+## 1. OPERATIONAL CONTEXT & EXECUTION SCOPE
+- Target AI System: ${targetAI}
+- Execution Mode: ${mode} (Maximum Determinism)
+- Output Language: ${outputLang}
+- Architectural Integrity: PCTCE+O & Lyra 4D Certified
+
+## 2. SYNTHESIZED MASTER DIRECTIVES
+${cleanBase}
+
+## 3. UNIVERSAL ADAPTIVE ENRICHMENT & QUALITY GATES
+${specializedEnrichment}
+
+## 4. STRICT OUTPUT FORMAT & CONFLICT RESOLUTION
+- Zero Conversational Meta: Mulai langsung pada output yang diminta tanpa kalimat pengantar atau penutup.
+- Self-Consistency Check: Jika terdapat instruksi ambigu, pilih interpretasi yang paling aman dan operasional.
+- High Signal-to-Noise: Pertahankan efisiensi token maksimal tanpa mengorbankan kedalaman teknis.`;
+
+  return {
+    refinedPrompt,
+    engineUsed: 'Engine AI Studio PCTCE+O (Universal Adaptive Refiner)',
+  };
+}
+
+// ADVANCED FINAL REFINEMENT ENDPOINT
+// Takes Optimized Request as primary input and executes secondary high-precision refinement.
+// Completely isolated from primary /api/refine.
+app.post('/api/advanced-refine', async (req, res) => {
+  try {
+    const {
+      optimizedPrompt,
+      originalPrompt = '',
+      targetAI = 'Auto Detect',
+      mode = 'Advanced Refine',
+      outputLang = 'Indonesia',
+      promptStyle = 'General Assistant',
+      customStyle = '',
+      images = [],
+    } = req.body;
+
+    if (!optimizedPrompt || typeof optimizedPrompt !== 'string' || !optimizedPrompt.trim()) {
+      return res.status(400).json({
+        success: false,
+        error: 'Optimized Request input tidak boleh kosong.',
+      });
+    }
+
+    const sessionId = (req.headers['x-session-id'] as string) || req.body?.sessionId || 'stateless';
+    console.log(`[API /api/advanced-refine] [Session: ${sessionId}] Running Advanced Final Refinement on ${optimizedPrompt.length} chars | Target: ${targetAI}`);
+
+    const customKey = (req.headers['x-gemini-api-key'] as string) || req.body?.apiKey;
+    const provider = (req.headers['x-ai-provider'] as string) || req.body?.provider || GEMINI_CONFIG.provider;
+    const requestedModel = (req.headers['x-gemini-model'] as string) || req.body?.model || GEMINI_CONFIG.model;
+    const ai = getGeminiClient(customKey);
+
+    let refinedPrompt = '';
+    let usedModel = '';
+
+    if (ai) {
+      try {
+        const advancedSystemInstruction = `You are an Elite Principal Prompt Architect and Universal Prompt Refinement Specialist.
+Your mission is ADVANCED FINAL REFINEMENT:
+Take an already-synthesized "Optimized Request" and elevate it to its definitive, highest-precision, production-grade master instruction form.
+
+CORE REFINEMENT PRINCIPLES:
+1. INTENT PRESERVATION: Faithfully preserve the user's primary objectives, constraints, and target outcomes.
+2. CONTEXT VALIDATION: Ensure all parameters are consistent with the current task. Eliminate irrelevant cross-session assumptions.
+3. DETAIL ENRICHMENT: Elevate operational depth, technical parameters, and execution specifications without conversational fluff.
+4. STRUCTURAL OPTIMIZATION: Organize into clear, hierarchical, systematic markdown blocks optimized for target AI execution.
+5. CONFLICT RESOLUTION: Resolve ambiguities or contradictory clauses logically without deviating from core intent.
+6. COMPLETENESS VALIDATION: Ensure no required specifications were omitted.
+7. EXECUTION PRECISION: High signal-to-noise ratio. Zero meta commentary or pleasantries. Every sentence must be an actionable constraint or directive.
+8. UNIVERSAL ADAPTIVE REFINEMENT: Adapt your refinement criteria to the specific domain (e.g. Photography/Image generation optics & aspect ratio; Coding architectural boundaries & error handling; Writing tone & narrative pacing; Data analysis metric causality; UI/UX layout & component hierarchies).
+
+STRICT OUTPUT REQUIREMENT:
+Output ONLY the clean, final, ready-to-run refined master prompt text.
+DO NOT include any conversational meta-commentary, introductory remarks ("Here is your refined prompt:"), or concluding summaries.`;
+
+        const userParts: any[] = [];
+        if (images && images.length > 0) {
+          for (const img of images) {
+            if (img.base64Data && img.mimeType) {
+              userParts.push({
+                inlineData: {
+                  mimeType: img.mimeType,
+                  data: img.base64Data,
+                },
+              });
+            }
+          }
+        }
+
+        const promptText = `OPTIMIZED REQUEST (PRIMARY INPUT TO REFINE):
+"""
+${optimizedPrompt}
+"""
+
+ADDITIONAL CONTEXT (IF RELEVANT):
+- Original User Request: ${originalPrompt || 'N/A'}
+- Target AI: ${targetAI}
+- Mode: ${mode}
+- Language: ${outputLang}
+- Style: ${promptStyle === 'Custom' ? `Custom (${customStyle})` : promptStyle}
+${images && images.length > 0 ? `- Reference Images: ${images.length} image(s) attached for visual grounding.\n` : ''}
+
+Please execute the Universal Adaptive Refinement and output ONLY the final, definitive, production-grade master prompt.`;
+
+        userParts.push({ text: promptText });
+
+        const { response, usedModel: modelName } = await generateContentWithRetry(ai, {
+          model: requestedModel,
+          contents: [{ role: 'user', parts: userParts }],
+          config: {
+            systemInstruction: advancedSystemInstruction,
+            thinkingConfig: {
+              thinkingLevel: mode === 'Expert Refine' ? 'high' : 'medium',
+            },
+          },
+        });
+
+        const rawText = response.text || '';
+        // Extract clean text, stripping code block markers if wrapped entirely in them
+        const codeBlockMatch = rawText.match(/^\s*```(?:markdown|text)?\n([\s\S]*?)```\s*$/);
+        refinedPrompt = codeBlockMatch ? codeBlockMatch[1].trim() : rawText.trim();
+        usedModel = provider === 'gemini-3.8-flash' ? `Gemini API (${modelName})` : `Engine AI Studio PCTCE+O (${modelName})`;
+      } catch (geminiError: any) {
+        console.warn('[API /api/advanced-refine] Gemini API unavailable. Engaging server-side PCTCE+O engine:', geminiError?.message);
+        const fallback = generateServerLocalAdvancedRefinement(optimizedPrompt, originalPrompt, targetAI, mode, outputLang, promptStyle, customStyle);
+        refinedPrompt = fallback.refinedPrompt;
+        usedModel = provider === 'gemini-3.8-flash' ? 'Gemini API (gemini-3.8-flash) [Local Engine Fallback]' : fallback.engineUsed;
+      }
+    } else {
+      console.log('[API /api/advanced-refine] Operating in zero-latency mode via built-in PCTCE+O engine.');
+      const fallback = generateServerLocalAdvancedRefinement(optimizedPrompt, originalPrompt, targetAI, mode, outputLang, promptStyle, customStyle);
+      refinedPrompt = fallback.refinedPrompt;
+      usedModel = fallback.engineUsed;
+    }
+
+    res.json({
+      success: true,
+      refinedPrompt,
+      engineUsed: usedModel,
+    });
+  } catch (err: any) {
+    const errorMsg = err?.message || 'Terjadi kesalahan pada server saat memproses Advanced Final Refinement.';
+    console.error('Advanced refine error:', errorMsg);
+
+    res.status(500).json({
+      success: false,
+      error: errorMsg,
+      message: 'Gagal menjalankan Advanced Final Refinement. Silakan coba kembali.',
+    });
+  }
+});
+
 // Configure Vite integration for dev, or static files for prod
 async function startServer() {
   const isProd = process.env.NODE_ENV === 'production';

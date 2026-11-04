@@ -45,6 +45,17 @@ export interface RefinerOptions {
   images?: ImageAttachment[];
 }
 
+
+export type AdvancedRefineStatus = 'idle' | 'ready' | 'processing' | 'completed' | 'failed';
+
+export interface AdvancedRefineData {
+  refinedPrompt: string;
+  status: AdvancedRefineStatus;
+  engineUsed?: string;
+  sourceOptimizedPrompt?: string;
+  createdAt?: string;
+}
+
 export interface RefineMetrics {
   originalWordCount: number;
   originalCharCount: number;
@@ -65,6 +76,7 @@ export interface RefineResult {
   options: RefinerOptions;
   engineUsed?: string;
   imagesCount?: number;
+  advancedRefinement?: AdvancedRefineData;
 }
 
 export interface HistoryItem extends RefineResult {
