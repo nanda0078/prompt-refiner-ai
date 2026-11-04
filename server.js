@@ -31,12 +31,63 @@ function getGeminiClient(customApiKey) {
     }
   });
 }
+const GEMINI_CONFIG = {
+  provider: "gemini",
+  model: "gemini-3.8-flash",
+  apiVersion: "v1beta"
+};
+function maskApiKey(text) {
+  if (!text) return "";
+  return text.replace(/AIza[0-9A-Za-z_-]{35}/g, "AIza...[MASKED]");
+}
+function formatGeminiError(err, requestedModel) {
+  const rawMsg = err?.message || String(err);
+  const cleanMsg = maskApiKey(rawMsg);
+  let status = 400;
+  let userFriendly = "";
+  if (cleanMsg.includes("API_KEY_INVALID") || cleanMsg.includes("API key not valid")) {
+    status = 400;
+    userFriendly = "Google Gemini API Key tidak valid. Harap periksa kembali API Key Anda dari Google AI Studio (aistudio.google.com/apikey).";
+  } else if (cleanMsg.includes("NOT_FOUND") || cleanMsg.includes("404")) {
+    status = 404;
+    userFriendly = `Model '${requestedModel}' tidak ditemukan pada API version ${GEMINI_CONFIG.apiVersion} atau belum tersedia untuk API Key Anda.`;
+  } else if (cleanMsg.includes("PERMISSION_DENIED") || cleanMsg.includes("403")) {
+    status = 403;
+    userFriendly = "Akses ditolak (Permission Denied). Akun Google Cloud atau API Key Anda tidak memiliki izin untuk mengakses model ini.";
+  } else if (cleanMsg.includes("RESOURCE_EXHAUSTED") || cleanMsg.includes("429")) {
+    status = 429;
+    userFriendly = "Batas kuota terlampaui (Quota / Rate Limit Exceeded). Harap tunggu beberapa saat sebelum mencoba kembali.";
+  } else if (cleanMsg.includes("Timeout") || cleanMsg.includes("ECONNREFUSED") || cleanMsg.includes("ETIMEDOUT") || cleanMsg.includes("fetch failed")) {
+    status = 504;
+    userFriendly = "Koneksi ke endpoint Google Gemini API mengalami timeout atau kegagalan jaringan.";
+  } else {
+    status = 400;
+    userFriendly = `Gagal terhubung ke Gemini API (${requestedModel}): ${cleanMsg.slice(0, 200)}`;
+  }
+  return {
+    status,
+    error: cleanMsg,
+    message: userFriendly,
+    technicalDetails: {
+      model: requestedModel,
+      apiVersion: GEMINI_CONFIG.apiVersion,
+      rawError: cleanMsg.slice(0, 300)
+    }
+  };
+}
 app.get("/api/status", (req, res) => {
   const hasEnvKey = isValidApiKey(process.env.GEMINI_API_KEY);
   res.json({
     status: "ok",
     hasEnvKey,
-    model: "gemini-2.5-flash",
+    activeDefaultProvider: "gemini-3.8-flash",
+    defaultModel: GEMINI_CONFIG.model,
+    apiVersion: GEMINI_CONFIG.apiVersion,
+    supportedProviders: [
+      { id: "gemini-3.8-flash", name: "Gemini API (gemini-3.8-flash)", model: GEMINI_CONFIG.model },
+      { id: "pctce-o-studio", name: "Engine AI Studio PCTCE+O", model: "pctce-o-studio" }
+    ],
+    model: GEMINI_CONFIG.model,
     version: "1.0.0"
   });
 });
@@ -52,80 +103,90 @@ app.post("/api/reset-session", (req, res) => {
   });
 });
 async function generateContentWithRetry(ai, params, maxRetries = 1) {
-  const candidateModels = [
-    params.model,
-    "gemini-2.5-flash",
-    "gemini-2.0-flash",
-    "gemini-1.5-flash"
-  ];
-  const modelsToTry = Array.from(new Set(candidateModels.filter(Boolean)));
+  const targetModel = params.model || GEMINI_CONFIG.model;
   let lastError = null;
-  for (const model of modelsToTry) {
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      try {
-        console.log(`[Gemini API] Trying model: ${model} (attempt ${attempt + 1})...`);
-        const config = { ...params.config };
-        if (model.includes("1.5") || model.includes("2.0")) {
-          delete config.thinkingConfig;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`[Gemini API] Requesting target model: ${targetModel} (attempt ${attempt + 1}/${maxRetries + 1})...`);
+      const config = { ...params.config };
+      delete config.temperature;
+      delete config.topP;
+      delete config.topK;
+      delete config.candidateCount;
+      if (config.thinkingConfig) {
+        if (config.thinkingConfig.thinkingBudget !== void 0 && !config.thinkingConfig.thinkingLevel) {
+          config.thinkingConfig.thinkingLevel = "medium";
+          delete config.thinkingConfig.thinkingBudget;
         }
-        const timeoutMs = 15e3;
-        const timeoutPromise = new Promise(
-          (_, reject) => setTimeout(() => reject(new Error(`Timeout calling Gemini model ${model} after ${timeoutMs}ms`)), timeoutMs)
-        );
-        const callPromise = ai.models.generateContent({
-          ...params,
-          config,
-          model
-        });
-        const response = await Promise.race([callPromise, timeoutPromise]);
-        console.log(`[Gemini API] Successfully generated with model: ${model}`);
-        return { response, usedModel: model };
-      } catch (err) {
-        lastError = err;
-        const msg = err?.message || "";
-        console.warn(`[Gemini API] Model ${model} attempt ${attempt + 1} failed: ${msg}`);
-        const isTemporary = msg.includes("503") || msg.includes("429") || msg.includes("UNAVAILABLE") || msg.includes("high demand") || msg.includes("Timeout");
-        if (isTemporary && attempt < maxRetries) {
-          await new Promise((r) => setTimeout(r, 1e3));
-          continue;
-        }
-        break;
       }
+      const timeoutMs = 2e4;
+      const timeoutPromise = new Promise(
+        (_, reject) => setTimeout(() => reject(new Error(`Timeout memanggil Gemini model ${targetModel} setelah ${timeoutMs}ms`)), timeoutMs)
+      );
+      const callPromise = ai.models.generateContent({
+        ...params,
+        config,
+        model: targetModel
+      });
+      const response = await Promise.race([callPromise, timeoutPromise]);
+      console.log(`[Gemini API] Successfully generated with model: ${targetModel}`);
+      return { response, usedModel: targetModel };
+    } catch (err) {
+      lastError = err;
+      const msg = err?.message || "";
+      console.warn(`[Gemini API] Model ${targetModel} attempt ${attempt + 1} failed: ${maskApiKey(msg)}`);
+      const isTemporary = msg.includes("503") || msg.includes("429") || msg.includes("UNAVAILABLE") || msg.includes("high demand") || msg.includes("Timeout");
+      if (isTemporary && attempt < maxRetries) {
+        await new Promise((r) => setTimeout(r, 1e3));
+        continue;
+      }
+      break;
     }
   }
   throw lastError;
 }
 app.post("/api/test-connection", async (req, res) => {
+  const customKey = req.headers["x-gemini-api-key"] || req.body?.apiKey;
+  const provider = req.headers["x-ai-provider"] || req.body?.provider || GEMINI_CONFIG.provider;
+  const targetModel = req.headers["x-gemini-model"] || req.body?.model || GEMINI_CONFIG.model;
+  console.log(`[API /api/test-connection] Testing connection for provider: ${provider} | Target Model: ${targetModel}`);
   try {
-    const customKey = req.headers["x-gemini-api-key"] || req.body?.apiKey;
     const ai = getGeminiClient(customKey);
     if (!ai) {
       return res.status(400).json({
         success: false,
+        model: targetModel,
+        provider,
         message: "API Key belum valid atau masih menggunakan placeholder. Harap masukkan Gemini API Key yang valid (diawali AIza...)."
       });
     }
     const startTime = Date.now();
     const { response, usedModel } = await generateContentWithRetry(ai, {
-      model: "gemini-2.5-flash",
+      model: targetModel,
       contents: "Ping test. Reply with: OK"
     });
     const latency = Date.now() - startTime;
     const reply = response.text || "";
+    const providerDisplayName = provider === "gemini-3.8-flash" || provider === "gemini" ? `Gemini API (${usedModel})` : "Engine AI Studio PCTCE+O";
     res.json({
       success: true,
       latency,
       reply: reply.trim(),
       model: usedModel,
+      provider,
       usingCustomKey: !!customKey,
-      message: `Koneksi ke Gemini API (${usedModel}) berhasil terverifikasi dalam ${latency}ms!`
+      message: `Koneksi ke ${providerDisplayName} berhasil terverifikasi dalam ${latency}ms!`
     });
   } catch (err) {
-    const errorMsg = err?.message || "Gagal terhubung ke Gemini API";
-    res.status(400).json({
+    const parsed = formatGeminiError(err, targetModel);
+    console.error(`[API /api/test-connection] Verification failed for ${targetModel}:`, parsed.error);
+    res.status(parsed.status).json({
       success: false,
-      error: errorMsg,
-      message: errorMsg.includes("API_KEY_INVALID") || errorMsg.includes("API key not valid") ? "Gemini API Key tidak valid. Periksa kembali API Key Anda dari Google AI Studio." : `Gagal menguji koneksi: ${errorMsg}`
+      model: targetModel,
+      provider,
+      error: parsed.error,
+      message: parsed.message,
+      technicalDetails: parsed.technicalDetails
     });
   }
 });
@@ -358,6 +419,8 @@ app.post("/api/refine", async (req, res) => {
     const sessionId = req.headers["x-session-id"] || req.body?.sessionId || "stateless";
     console.log(`[API /api/refine] [Session: ${sessionId}] Processing fresh isolated request: "${prompt.slice(0, 40)}..." | Target: ${targetAI} | Mode: ${mode}`);
     const customKey = req.headers["x-gemini-api-key"] || req.body?.apiKey;
+    const provider = req.headers["x-ai-provider"] || req.body?.provider || GEMINI_CONFIG.provider;
+    const requestedModel = req.headers["x-gemini-model"] || req.body?.model || GEMINI_CONFIG.model;
     const ai = getGeminiClient(customKey);
     let rawMarkdown = "";
     let usedModel = "";
@@ -405,7 +468,7 @@ ${prompt}
 
 Please execute the Lyra 4D workflow and PCTCE+O framework to produce the final refined master prompt. Follow the strict four-section markdown format.`;
         const { response, usedModel: modelName } = await generateContentWithRetry(ai, {
-          model: "gemini-2.5-flash",
+          model: requestedModel,
           contents: [
             {
               role: "user",
@@ -420,18 +483,18 @@ Please execute the Lyra 4D workflow and PCTCE+O framework to produce the final r
           }
         });
         rawMarkdown = response.text || "";
-        usedModel = modelName;
+        usedModel = provider === "gemini-3.8-flash" ? `Gemini API (${modelName})` : `Engine AI Studio PCTCE+O (${modelName})`;
       } catch (geminiError) {
         console.warn("[API /api/refine] Gemini API unavailable or timed out. Seamlessly engaging local PCTCE+O engine:", geminiError?.message);
         const fallback = generateLocalPctceRefinement(prompt, targetAI, mode, outputLang, promptStyle, customStyle);
         rawMarkdown = fallback.rawMarkdown;
-        usedModel = "PCTCE+O Engine (Local Fallback)";
+        usedModel = provider === "gemini-3.8-flash" ? "Gemini API (gemini-3.8-flash) [Local PCTCE+O Fallback]" : "Engine AI Studio PCTCE+O";
       }
     } else {
       console.log("[API /api/refine] Operating in zero-latency mode via built-in PCTCE+O engine.");
       const fallback = generateLocalPctceRefinement(prompt, targetAI, mode, outputLang, promptStyle, customStyle);
       rawMarkdown = fallback.rawMarkdown;
-      usedModel = "PCTCE+O Engine (Built-in)";
+      usedModel = provider === "gemini-3.8-flash" ? "Gemini API (gemini-3.8-flash) [Local PCTCE+O Fallback]" : "Engine AI Studio PCTCE+O";
     }
     const parsed = parseRefinerResponse(rawMarkdown);
     const origWords = prompt.trim().split(/\s+/).filter(Boolean).length;
@@ -484,3 +547,6 @@ async function startServer() {
   });
 }
 startServer();
+export {
+  GEMINI_CONFIG
+};
