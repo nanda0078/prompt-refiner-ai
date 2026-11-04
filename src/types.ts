@@ -66,7 +66,24 @@ export interface ConnectionTestResult {
   latency?: number;
   message: string;
   usingCustomKey?: boolean;
+  model?: string;
+  technicalDetails?: any;
 }
+
+export interface GeminiConfig {
+  provider: string;
+  model: string;
+  apiVersion: string;
+}
+
+/**
+ * Single Source of Truth for Gemini API Configuration
+ */
+export const GEMINI_CONFIG: GeminiConfig = {
+  provider: 'gemini',
+  model: 'gemini-3.8-flash',
+  apiVersion: 'v1beta',
+};
 
 export type AIProviderId = 'gemini-3.8-flash' | 'pctce-o-studio';
 

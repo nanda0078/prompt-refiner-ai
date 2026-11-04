@@ -1,4 +1,4 @@
-import { ConnectionTestResult, RefineResult, RefinerOptions, AIProviderId } from '../types';
+import { ConnectionTestResult, RefineResult, RefinerOptions, AIProviderId, GEMINI_CONFIG } from '../types';
 import { generateClientPctceRefinement } from './localEngine';
 
 const SELECTED_PROVIDER_STORAGE_KEY = 'prompt_refiner_selected_provider';
@@ -8,13 +8,13 @@ const SELECTED_GEMINI_MODEL_STORAGE_KEY = 'prompt_refiner_selected_gemini_model'
 
 /**
  * Get selected Gemini model (e.g. 'gemini-3.8-flash', 'gemini-2.5-flash').
- * Default is 'gemini-3.8-flash'.
+ * Default is configured centrally in GEMINI_CONFIG.model.
  */
 export function getSelectedGeminiModel(): string {
   try {
-    return localStorage.getItem(SELECTED_GEMINI_MODEL_STORAGE_KEY) || 'gemini-3.8-flash';
+    return localStorage.getItem(SELECTED_GEMINI_MODEL_STORAGE_KEY) || GEMINI_CONFIG.model;
   } catch {
-    return 'gemini-3.8-flash';
+    return GEMINI_CONFIG.model;
   }
 }
 
@@ -40,7 +40,6 @@ export function getActiveProvider(): AIProviderId {
     if (saved === 'pctce-o-studio') {
       return 'pctce-o-studio';
     }
-    // Default to 'gemini-3.8-flash'
     return 'gemini-3.8-flash';
   } catch {
     return 'gemini-3.8-flash';
@@ -146,7 +145,7 @@ export async function testGeminiConnection(
   const customKey =
     keyToTest !== undefined ? keyToTest : getProviderApiKey(targetProvider);
   const targetModel =
-    modelToTest || (targetProvider === 'gemini-3.8-flash' ? getSelectedGeminiModel() : 'gemini-2.5-flash');
+    modelToTest || (targetProvider === 'gemini-3.8-flash' ? getSelectedGeminiModel() : GEMINI_CONFIG.model);
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -173,18 +172,21 @@ export async function testGeminiConnection(
     if (!res.ok) {
       return {
         success: false,
-        message: data.message || data.error || 'Gagal terhubung ke Gemini API.',
+        model: data.model || targetModel,
+        message: data.message || data.error || `Gagal terhubung ke Gemini API (${targetModel}).`,
+        technicalDetails: data.technicalDetails,
       };
     }
 
     return {
       success: true,
       latency: data.latency,
+      model: data.model || targetModel,
       message:
         data.message ||
         `Koneksi ${
           targetProvider === 'gemini-3.8-flash'
-            ? 'Gemini API (gemini-3.8-flash)'
+            ? `Gemini API (${data.model || targetModel})`
             : 'Engine AI Studio PCTCE+O'
         } berhasil terverifikasi!`,
       usingCustomKey: data.usingCustomKey,
@@ -195,11 +197,11 @@ export async function testGeminiConnection(
       try {
         const start = Date.now();
         const directRes = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${customKey}`,
+          `https://generativelanguage.googleapis.com/${GEMINI_CONFIG.apiVersion}/models/${targetModel}:generateContent?key=${customKey}`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ contents: [{ parts: [{ text: 'Ping test' }] }] }),
+            body: JSON.stringify({ contents: [{ parts: [{ text: 'Ping test. Reply with: OK' }] }] }),
           }
         );
         const directData = await directRes.json();
@@ -207,22 +209,34 @@ export async function testGeminiConnection(
           return {
             success: true,
             latency: Date.now() - start,
+            model: targetModel,
             message: `Koneksi ke Google Gemini Cloud API (${targetModel}) berhasil terverifikasi langsung!`,
             usingCustomKey: true,
           };
         } else {
+          const directError = directData?.error?.message || '';
+          let userMsg = `Gagal menguji koneksi ke ${targetModel}: ${directError}`;
+          if (directError.includes('API_KEY_INVALID') || directError.includes('API key not valid')) {
+            userMsg = 'Google Gemini API Key tidak valid. Harap periksa kembali kunci Anda di Google AI Studio.';
+          } else if (directError.includes('NOT_FOUND')) {
+            userMsg = `Model '${targetModel}' tidak ditemukan pada API version ${GEMINI_CONFIG.apiVersion}.`;
+          } else if (directError.includes('RESOURCE_EXHAUSTED')) {
+            userMsg = 'Batas kuota Gemini API terlampaui (Quota Exceeded).';
+          }
           return {
             success: false,
-            message:
-              directData?.error?.message ||
-              `Gemini API Key tidak valid untuk model ${targetModel} menurut server Google.`,
+            model: targetModel,
+            message: userMsg,
+            technicalDetails: directData?.error,
           };
         }
       } catch (directErr: any) {
         return {
           success: false,
+          model: targetModel,
           message:
-            'Gagal terhubung ke Google Gemini Cloud: ' + (directErr?.message || 'Network error'),
+            `Gagal terhubung ke Google Gemini Cloud (${targetModel}): ` +
+            (directErr?.message || 'Network error'),
         };
       }
     }
@@ -295,7 +309,7 @@ export async function refinePromptApi(
 ): Promise<RefineResult> {
   const activeProvider = getActiveProvider();
   const customKey = getProviderApiKey(activeProvider);
-  const targetModel = activeProvider === 'gemini-3.8-flash' ? getSelectedGeminiModel() : 'gemini-2.5-flash';
+  const targetModel = activeProvider === 'gemini-3.8-flash' ? getSelectedGeminiModel() : GEMINI_CONFIG.model;
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -344,7 +358,7 @@ export async function refinePromptApi(
       optimizedPrompt: data.optimizedPrompt || '',
       appliedTechniques: data.appliedTechniques || [],
       improvementQuestions: data.improvementQuestions || [],
-      engineUsed: data.engineUsed || (activeProvider === 'gemini-3.8-flash' ? 'Gemini API (gemini-3.8-flash)' : 'Engine AI Studio PCTCE+O'),
+      engineUsed: data.engineUsed || (activeProvider === 'gemini-3.8-flash' ? `Gemini API (${targetModel})` : 'Engine AI Studio PCTCE+O'),
       metrics: data.metrics || {
         originalWordCount: prompt.trim().split(/\s+/).length,
         originalCharCount: prompt.length,
@@ -383,7 +397,7 @@ ${options.targetAI} - ${options.promptStyle} (${options.mode})
 2. [Clarification question 2]`;
 
         const directRes = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${customKey}`,
+          `https://generativelanguage.googleapis.com/${GEMINI_CONFIG.apiVersion}/models/${targetModel}:generateContent?key=${customKey}`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -451,7 +465,7 @@ ${options.targetAI} - ${options.promptStyle} (${options.mode})
 
     const fallbackEngineName =
       activeProvider === 'gemini-3.8-flash'
-        ? 'Gemini API (gemini-3.8-flash) [Local PCTCE+O Fallback]'
+        ? `Gemini API (${targetModel}) [Local PCTCE+O Fallback]`
         : 'Engine AI Studio PCTCE+O';
 
     return {

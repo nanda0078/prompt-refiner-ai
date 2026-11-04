@@ -56,6 +56,13 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
     setSaveSuccess(false);
   };
 
+  const handleModelChange = (modelId: string) => {
+    setSelectedModel(modelId);
+    setSelectedGeminiModel(modelId);
+    setTestResult(null);
+    setSaveSuccess(false);
+  };
+
   const handleSave = () => {
     setActiveProvider(selectedProvider);
     saveProviderApiKey(selectedProvider, apiKey);
@@ -219,7 +226,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
                     <button
                       key={opt.id}
                       type="button"
-                      onClick={() => setSelectedModel(opt.id)}
+                      onClick={() => handleModelChange(opt.id)}
                       className={`p-2.5 rounded-xl border text-left transition-all flex flex-col justify-between cursor-pointer ${
                         isSelected
                           ? 'border-indigo-600 bg-white dark:bg-gray-800 ring-2 ring-indigo-500/25 shadow-xs'
@@ -364,8 +371,21 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
                 <p className="font-semibold">{testResult.message}</p>
                 {testResult.latency !== undefined && (
                   <p className="text-[11px] opacity-80 mt-0.5">
-                    Provider: {selectedProvider === 'gemini-3.8-flash' ? `Gemini API (${selectedModel})` : 'Engine AI Studio PCTCE+O'} • Waktu respon: {testResult.latency}ms
+                    Provider: {selectedProvider === 'gemini-3.8-flash' ? `Gemini API (${testResult.model || selectedModel})` : 'Engine AI Studio PCTCE+O'} • Waktu respon: {testResult.latency}ms
                   </p>
+                )}
+                {!testResult.success && testResult.model && (
+                  <p className="text-[11px] opacity-75 mt-0.5 font-mono">
+                    Model terkonfirmasi dipanggil: {testResult.model}
+                  </p>
+                )}
+                {testResult.technicalDetails && (
+                  <div className="mt-1.5 p-2 rounded-lg bg-red-100/60 dark:bg-red-950/50 border border-red-200 dark:border-red-900/60 font-mono text-[10px] break-all text-red-900 dark:text-red-200">
+                    <span className="font-bold block mb-0.5">Detail Teknis Debugging:</span>
+                    {typeof testResult.technicalDetails === 'string'
+                      ? testResult.technicalDetails
+                      : JSON.stringify(testResult.technicalDetails, null, 2)}
+                  </div>
                 )}
               </div>
             </div>

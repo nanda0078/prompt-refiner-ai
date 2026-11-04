@@ -46,6 +46,58 @@ function getGeminiClient(customApiKey?: string): GoogleGenAI | null {
   });
 }
 
+/**
+ * Single Source of Truth for Gemini API Configuration
+ */
+export const GEMINI_CONFIG = {
+  provider: 'gemini',
+  model: 'gemini-3.8-flash',
+  apiVersion: 'v1beta',
+};
+
+function maskApiKey(text: string): string {
+  if (!text) return '';
+  return text.replace(/AIza[0-9A-Za-z_-]{35}/g, 'AIza...[MASKED]');
+}
+
+function formatGeminiError(err: any, requestedModel: string) {
+  const rawMsg = err?.message || String(err);
+  const cleanMsg = maskApiKey(rawMsg);
+  let status = 400;
+  let userFriendly = '';
+
+  if (cleanMsg.includes('API_KEY_INVALID') || cleanMsg.includes('API key not valid')) {
+    status = 400;
+    userFriendly = 'Google Gemini API Key tidak valid. Harap periksa kembali API Key Anda dari Google AI Studio (aistudio.google.com/apikey).';
+  } else if (cleanMsg.includes('NOT_FOUND') || cleanMsg.includes('404')) {
+    status = 404;
+    userFriendly = `Model '${requestedModel}' tidak ditemukan pada API version ${GEMINI_CONFIG.apiVersion} atau belum tersedia untuk API Key Anda.`;
+  } else if (cleanMsg.includes('PERMISSION_DENIED') || cleanMsg.includes('403')) {
+    status = 403;
+    userFriendly = 'Akses ditolak (Permission Denied). Akun Google Cloud atau API Key Anda tidak memiliki izin untuk mengakses model ini.';
+  } else if (cleanMsg.includes('RESOURCE_EXHAUSTED') || cleanMsg.includes('429')) {
+    status = 429;
+    userFriendly = 'Batas kuota terlampaui (Quota / Rate Limit Exceeded). Harap tunggu beberapa saat sebelum mencoba kembali.';
+  } else if (cleanMsg.includes('Timeout') || cleanMsg.includes('ECONNREFUSED') || cleanMsg.includes('ETIMEDOUT') || cleanMsg.includes('fetch failed')) {
+    status = 504;
+    userFriendly = 'Koneksi ke endpoint Google Gemini API mengalami timeout atau kegagalan jaringan.';
+  } else {
+    status = 400;
+    userFriendly = `Gagal terhubung ke Gemini API (${requestedModel}): ${cleanMsg.slice(0, 200)}`;
+  }
+
+  return {
+    status,
+    error: cleanMsg,
+    message: userFriendly,
+    technicalDetails: {
+      model: requestedModel,
+      apiVersion: GEMINI_CONFIG.apiVersion,
+      rawError: cleanMsg.slice(0, 300),
+    },
+  };
+}
+
 // Status endpoint
 app.get('/api/status', (req, res) => {
   const hasEnvKey = isValidApiKey(process.env.GEMINI_API_KEY);
@@ -53,11 +105,13 @@ app.get('/api/status', (req, res) => {
     status: 'ok',
     hasEnvKey,
     activeDefaultProvider: 'gemini-3.8-flash',
+    defaultModel: GEMINI_CONFIG.model,
+    apiVersion: GEMINI_CONFIG.apiVersion,
     supportedProviders: [
-      { id: 'gemini-3.8-flash', name: 'Gemini API (gemini-3.8-flash)', model: 'gemini-3.8-flash' },
+      { id: 'gemini-3.8-flash', name: 'Gemini API (gemini-3.8-flash)', model: GEMINI_CONFIG.model },
       { id: 'pctce-o-studio', name: 'Engine AI Studio PCTCE+O', model: 'pctce-o-studio' }
     ],
-    model: 'gemini-3.8-flash',
+    model: GEMINI_CONFIG.model,
     version: '1.0.0',
   });
 });
@@ -77,6 +131,7 @@ app.post('/api/reset-session', (req, res) => {
 });
 
 // Helper for generating content with retry on temporary 503/429 with timeout
+// STRICT: No secret or cascade fallback to other models! Only requests the targetModel.
 async function generateContentWithRetry(
   ai: GoogleGenAI,
   params: {
@@ -86,61 +141,61 @@ async function generateContentWithRetry(
   },
   maxRetries = 1
 ) {
-  const candidateModels = [
-    params.model,
-    'gemini-3.8-flash',
-    'gemini-2.5-flash',
-    'gemini-2.0-flash',
-    'gemini-1.5-flash',
-  ];
-  // Deduplicate candidate models
-  const modelsToTry = Array.from(new Set(candidateModels.filter(Boolean)));
+  const targetModel = params.model || GEMINI_CONFIG.model;
   let lastError: any = null;
 
-  for (const model of modelsToTry) {
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      try {
-        console.log(`[Gemini API] Trying model: ${model} (attempt ${attempt + 1})...`);
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`[Gemini API] Requesting target model: ${targetModel} (attempt ${attempt + 1}/${maxRetries + 1})...`);
 
-        // Clone config and sanitize thinkingConfig for non-thinking models
-        const config = { ...params.config };
-        if (model.includes('1.5') || model.includes('2.0')) {
-          delete config.thinkingConfig;
+      // Clean config strictly compliant with Gemini 3.8 Flash specifications:
+      // Remove deprecated temperature, topP, topK, candidateCount.
+      // Use thinkingConfig with thinkingLevel instead of thinkingBudget.
+      const config: any = { ...params.config };
+      delete config.temperature;
+      delete config.topP;
+      delete config.topK;
+      delete config.candidateCount;
+
+      if (config.thinkingConfig) {
+        if (config.thinkingConfig.thinkingBudget !== undefined && !config.thinkingConfig.thinkingLevel) {
+          config.thinkingConfig.thinkingLevel = 'medium';
+          delete config.thinkingConfig.thinkingBudget;
         }
-
-        // Set a 15-second per-attempt timeout
-        const timeoutMs = 15000;
-        const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error(`Timeout calling Gemini model ${model} after ${timeoutMs}ms`)), timeoutMs)
-        );
-
-        const callPromise = ai.models.generateContent({
-          ...params,
-          config,
-          model,
-        });
-
-        const response = (await Promise.race([callPromise, timeoutPromise])) as any;
-        console.log(`[Gemini API] Successfully generated with model: ${model}`);
-        return { response, usedModel: model };
-      } catch (err: any) {
-        lastError = err;
-        const msg = err?.message || '';
-        console.warn(`[Gemini API] Model ${model} attempt ${attempt + 1} failed: ${msg}`);
-
-        const isTemporary =
-          msg.includes('503') ||
-          msg.includes('429') ||
-          msg.includes('UNAVAILABLE') ||
-          msg.includes('high demand') ||
-          msg.includes('Timeout');
-
-        if (isTemporary && attempt < maxRetries) {
-          await new Promise((r) => setTimeout(r, 1000));
-          continue;
-        }
-        break;
       }
+
+      // Set a 20-second per-attempt timeout
+      const timeoutMs = 20000;
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error(`Timeout memanggil Gemini model ${targetModel} setelah ${timeoutMs}ms`)), timeoutMs)
+      );
+
+      const callPromise = ai.models.generateContent({
+        ...params,
+        config,
+        model: targetModel,
+      });
+
+      const response = (await Promise.race([callPromise, timeoutPromise])) as any;
+      console.log(`[Gemini API] Successfully generated with model: ${targetModel}`);
+      return { response, usedModel: targetModel };
+    } catch (err: any) {
+      lastError = err;
+      const msg = err?.message || '';
+      console.warn(`[Gemini API] Model ${targetModel} attempt ${attempt + 1} failed: ${maskApiKey(msg)}`);
+
+      const isTemporary =
+        msg.includes('503') ||
+        msg.includes('429') ||
+        msg.includes('UNAVAILABLE') ||
+        msg.includes('high demand') ||
+        msg.includes('Timeout');
+
+      if (isTemporary && attempt < maxRetries) {
+        await new Promise((r) => setTimeout(r, 1000));
+        continue;
+      }
+      break;
     }
   }
 
@@ -149,16 +204,20 @@ async function generateContentWithRetry(
 
 // Test connection endpoint
 app.post('/api/test-connection', async (req, res) => {
-  try {
-    const customKey = (req.headers['x-gemini-api-key'] as string) || req.body?.apiKey;
-    const provider = (req.headers['x-ai-provider'] as string) || req.body?.provider || 'gemini-3.8-flash';
-    const targetModel = (req.headers['x-gemini-model'] as string) || req.body?.model || (provider === 'gemini-3.8-flash' ? 'gemini-3.8-flash' : 'gemini-2.5-flash');
+  const customKey = (req.headers['x-gemini-api-key'] as string) || req.body?.apiKey;
+  const provider = (req.headers['x-ai-provider'] as string) || req.body?.provider || GEMINI_CONFIG.provider;
+  const targetModel = (req.headers['x-gemini-model'] as string) || req.body?.model || GEMINI_CONFIG.model;
 
+  console.log(`[API /api/test-connection] Testing connection for provider: ${provider} | Target Model: ${targetModel}`);
+
+  try {
     const ai = getGeminiClient(customKey);
 
     if (!ai) {
       return res.status(400).json({
         success: false,
+        model: targetModel,
+        provider,
         message: 'API Key belum valid atau masih menggunakan placeholder. Harap masukkan Gemini API Key yang valid (diawali AIza...).',
       });
     }
@@ -171,7 +230,9 @@ app.post('/api/test-connection', async (req, res) => {
 
     const latency = Date.now() - startTime;
     const reply = response.text || '';
-    const providerDisplayName = provider === 'gemini-3.8-flash' ? 'Gemini API (gemini-3.8-flash)' : 'Engine AI Studio PCTCE+O';
+    const providerDisplayName = provider === 'gemini-3.8-flash' || provider === 'gemini'
+      ? `Gemini API (${usedModel})`
+      : 'Engine AI Studio PCTCE+O';
 
     res.json({
       success: true,
@@ -180,17 +241,19 @@ app.post('/api/test-connection', async (req, res) => {
       model: usedModel,
       provider,
       usingCustomKey: !!customKey,
-      message: `Koneksi ke ${providerDisplayName} (${usedModel}) berhasil terverifikasi dalam ${latency}ms!`,
+      message: `Koneksi ke ${providerDisplayName} berhasil terverifikasi dalam ${latency}ms!`,
     });
   } catch (err: any) {
-    const errorMsg = err?.message || 'Gagal terhubung ke Gemini API';
-    res.status(400).json({
+    const parsed = formatGeminiError(err, targetModel);
+    console.error(`[API /api/test-connection] Verification failed for ${targetModel}:`, parsed.error);
+
+    res.status(parsed.status).json({
       success: false,
-      error: errorMsg,
-      message:
-        errorMsg.includes('API_KEY_INVALID') || errorMsg.includes('API key not valid')
-          ? 'Gemini API Key tidak valid. Periksa kembali API Key Anda dari Google AI Studio.'
-          : `Gagal menguji koneksi: ${errorMsg}`,
+      model: targetModel,
+      provider,
+      error: parsed.error,
+      message: parsed.message,
+      technicalDetails: parsed.technicalDetails,
     });
   }
 });
@@ -466,8 +529,8 @@ app.post('/api/refine', async (req, res) => {
     console.log(`[API /api/refine] [Session: ${sessionId}] Processing fresh isolated request: "${prompt.slice(0, 40)}..." | Target: ${targetAI} | Mode: ${mode}`);
 
     const customKey = (req.headers['x-gemini-api-key'] as string) || req.body?.apiKey;
-    const provider = (req.headers['x-ai-provider'] as string) || req.body?.provider || 'gemini-3.8-flash';
-    const requestedModel = (req.headers['x-gemini-model'] as string) || req.body?.model || (provider === 'gemini-3.8-flash' ? 'gemini-3.8-flash' : 'gemini-2.5-flash');
+    const provider = (req.headers['x-ai-provider'] as string) || req.body?.provider || GEMINI_CONFIG.provider;
+    const requestedModel = (req.headers['x-gemini-model'] as string) || req.body?.model || GEMINI_CONFIG.model;
     const ai = getGeminiClient(customKey);
 
     let rawMarkdown = '';
