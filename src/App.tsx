@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Sparkles,
   Zap,
@@ -51,6 +51,11 @@ export default function App() {
   const [rawPrompt, setRawPrompt] = useState<string>('');
   const [selectedImages, setSelectedImages] = useState<ImageAttachment[]>([]);
   const [options, setOptions] = useState<RefinerOptions>(DEFAULT_OPTIONS);
+
+  // Asynchronous cancellation and session isolation refs
+  const sessionVersionRef = useRef<number>(0);
+  const activeAbortControllerRef = useRef<AbortController | null>(null);
+  const stepTimersRef = useRef<NodeJS.Timeout[]>([]);
 
   // Loading and workflow states
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -110,38 +115,66 @@ export default function App() {
     }
   }, [history]);
 
-  // Main refinement trigger
+  // Main refinement trigger with race-condition prevention & session isolation
   const handleOptimizePrompt = async (overridePrompt?: string) => {
     const promptToRefine = overridePrompt !== undefined ? overridePrompt : rawPrompt;
     if (!promptToRefine.trim() || isLoading) return;
 
+    // Track session version to discard results if user clicks Reset mid-flight
+    const currentVersion = ++sessionVersionRef.current;
+
+    // Abort previous pending fetch controller if any
+    if (activeAbortControllerRef.current) {
+      activeAbortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    activeAbortControllerRef.current = controller;
+
+    // Clear any pending step timers
+    stepTimersRef.current.forEach(clearTimeout);
+    stepTimersRef.current = [];
+
     setIsLoading(true);
     setErrorMessage(null);
 
-    // Lyra 4D workflow step simulation
+    // Lyra 4D workflow step simulation (tied strictly to current session version)
     setLoadingStep('1/4 Parsing tujuan utama & model AI target...');
-    const step1 = setTimeout(() => {
-      setLoadingStep('2/4 Mendiagnosis ambiguitas & gap konteks...');
+    const t1 = setTimeout(() => {
+      if (sessionVersionRef.current === currentVersion) {
+        setLoadingStep('2/4 Mendiagnosis ambiguitas & gap konteks...');
+      }
     }, 1200);
 
-    const step2 = setTimeout(() => {
-      setLoadingStep('3/4 Merancang arsitektur PCTCE+O & kompresi token...');
+    const t2 = setTimeout(() => {
+      if (sessionVersionRef.current === currentVersion) {
+        setLoadingStep('3/4 Merancang arsitektur PCTCE+O & kompresi token...');
+      }
     }, 2500);
 
-    const step3 = setTimeout(() => {
-      setLoadingStep('4/4 Memvalidasi kontrol halusinasi & format delivery...');
+    const t3 = setTimeout(() => {
+      if (sessionVersionRef.current === currentVersion) {
+        setLoadingStep('4/4 Memvalidasi kontrol halusinasi & format delivery...');
+      }
     }, 3500);
 
-    const step4 = setTimeout(() => {
-      setLoadingStep('Menyelesaikan sintesis Master Prompt PCTCE+O...');
+    const t4 = setTimeout(() => {
+      if (sessionVersionRef.current === currentVersion) {
+        setLoadingStep('Menyelesaikan sintesis Master Prompt PCTCE+O...');
+      }
     }, 6500);
+
+    stepTimersRef.current.push(t1, t2, t3, t4);
 
     try {
       const result = await refinePromptApi(promptToRefine, { ...options, images: selectedImages });
-      clearTimeout(step1);
-      clearTimeout(step2);
-      clearTimeout(step3);
-      clearTimeout(step4);
+
+      // If user reset session while request was in-flight, discard result entirely
+      if (sessionVersionRef.current !== currentVersion) {
+        return;
+      }
+
+      stepTimersRef.current.forEach(clearTimeout);
+      stepTimersRef.current = [];
 
       setCurrentResult(result);
 
@@ -152,16 +185,20 @@ export default function App() {
       };
       setHistory((prev) => [newHistoryItem, ...prev.filter((item) => item.id !== result.id)]);
     } catch (err: any) {
-      clearTimeout(step1);
-      clearTimeout(step2);
-      clearTimeout(step3);
-      clearTimeout(step4);
+      if (sessionVersionRef.current !== currentVersion) {
+        return;
+      }
+
+      stepTimersRef.current.forEach(clearTimeout);
+      stepTimersRef.current = [];
       setErrorMessage(
         err?.message || 'Terjadi kesalahan saat memproses prompt. Silakan coba kembali.'
       );
     } finally {
-      setIsLoading(false);
-      setLoadingStep('');
+      if (sessionVersionRef.current === currentVersion) {
+        setIsLoading(false);
+        setLoadingStep('');
+      }
     }
   };
 
@@ -211,20 +248,40 @@ export default function App() {
     setHistory((prev) => prev.filter((item) => item.id !== id));
   };
 
-  // Hard Reset & Complete Context Isolation Handler
+  // Hard Reset & Complete Fresh Application State Handler
   const handleHardReset = async () => {
-    // 1. Immediately abort running states and step timers
+    // 1. Invalidate session version immediately to cancel any in-flight asynchronous operations
+    sessionVersionRef.current++;
+
+    // 2. Abort any active HTTP / Gemini request controller
+    if (activeAbortControllerRef.current) {
+      activeAbortControllerRef.current.abort();
+      activeAbortControllerRef.current = null;
+    }
+
+    // 3. Clear all active step timers
+    stepTimersRef.current.forEach(clearTimeout);
+    stepTimersRef.current = [];
+
+    // 4. Reset all processing, loading, and error states
     setIsLoading(false);
     setLoadingStep('');
     setErrorMessage(null);
 
-    // 2. Clear prompt input, current result, and reset settings to default
+    // 5. Reset all user inputs, uploaded images, and analysis outputs
     setRawPrompt('');
-    setCurrentResult(null);
     setSelectedImages([]);
+    setCurrentResult(null);
+
+    // 6. Restore all dropdown options strictly to DEFAULT_OPTIONS:
+    // Target AI: ChatGPT | Mode: Advanced Refine | Lang: English | Style: Image Generation
     setOptions(DEFAULT_OPTIONS);
 
-    // 3. Purge transient session cache and drafts
+    // 7. Close any open drawers or modals
+    setIsHistoryDrawerOpen(false);
+    setIsBlueprintModalOpen(false);
+
+    // 8. Selectively purge transient session data (PRESERVING API KEYS & PERMANENT SETTINGS)
     try {
       sessionStorage.clear();
       localStorage.removeItem('prompt_refiner_draft');
@@ -232,7 +289,7 @@ export default function App() {
       console.warn('Storage purge warning:', e);
     }
 
-    // 4. Generate fresh session ID and notify server
+    // 9. Generate fresh session ID and notify server to purge server-side session cache
     resetSessionId();
     try {
       await resetSessionApi();
@@ -240,15 +297,15 @@ export default function App() {
       console.warn('Reset session API warning:', e);
     }
 
-    // 5. Visual confirmation toast
+    // 10. Visual confirmation toast
     setResetToast(
-      'Sesi Baru Diaktifkan: Seluruh konteks, cache, dan riwayat sebelumnya telah diisolasi secara total (One Session = One Independent Task).'
+      'Sesi Baru Diaktifkan: Seluruh data sesi dan pengaturan telah dikembalikan ke kondisi awal (Fresh State). Kunci API tetap aman tersimpan.'
     );
     setTimeout(() => {
       setResetToast(null);
     }, 4000);
 
-    // 6. Smooth scroll to top of workspace
+    // 11. Smooth scroll to top of workspace
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
