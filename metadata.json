@@ -1,0 +1,6 @@
+{
+  "name": "PROMPT REFINER AI",
+  "description": "Transform your ideas into powerful AI prompts using PCTCE+O framework and Lyra 4D workflow.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
