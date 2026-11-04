@@ -27,12 +27,22 @@ export type PromptStyle =
   | 'Business & Marketing'
   | 'Custom';
 
+export interface ImageAttachment {
+  id: string;
+  name: string;
+  mimeType: string;
+  base64Data: string; // raw base64 data without prefix
+  dataUrl: string; // complete data URL for preview
+  sizeBytes: number;
+}
+
 export interface RefinerOptions {
   targetAI: TargetAI;
   mode: OptimizationMode;
   outputLang: OutputLanguage;
   promptStyle: PromptStyle;
   customStyle?: string;
+  images?: ImageAttachment[];
 }
 
 export interface RefineMetrics {
@@ -54,6 +64,7 @@ export interface RefineResult {
   originalPrompt: string;
   options: RefinerOptions;
   engineUsed?: string;
+  imagesCount?: number;
 }
 
 export interface HistoryItem extends RefineResult {

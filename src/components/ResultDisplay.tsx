@@ -246,10 +246,19 @@ ${result.improvementQuestions.map((q, i) => `${i + 1}. ${q}`).join('\n')}
             <p className="text-sm font-semibold text-gray-900 dark:text-white">
               {result.targetAiMode}
             </p>
+            {result.imagesCount !== undefined && result.imagesCount > 0 && (
+              <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-md bg-indigo-100/70 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 text-[10px] font-semibold border border-indigo-200/60 dark:border-indigo-800/60">
+                🖼️ {result.imagesCount} Gambar Referensi Visual Terintegrasi
+              </span>
+            )}
           </div>
         </div>
         <div className="text-right text-[11px] text-gray-500 dark:text-gray-400 hidden sm:block">
-          <span>Formula: PCTCE+O</span> • <span>Engine: {result.engineUsed || 'Gemini API (gemini-3.8-flash)'}</span>
+          <span>Formula: PCTCE+O</span>
+          {result.imagesCount !== undefined && result.imagesCount > 0 && (
+            <span> • <strong className="text-indigo-600 dark:text-indigo-400">🖼️ {result.imagesCount} Gambar Referensi</strong></span>
+          )}
+          <span> • Engine: {result.engineUsed || 'Gemini API (gemini-3.8-flash)'}</span>
         </div>
       </div>
 

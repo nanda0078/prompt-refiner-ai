@@ -236,6 +236,7 @@ app.post('/api/test-connection', async (req, res) => {
 
     res.json({
       success: true,
+      imagesCount: images.length,
       latency,
       reply: reply.trim(),
       model: usedModel,
@@ -531,6 +532,7 @@ app.post('/api/refine', async (req, res) => {
     const customKey = (req.headers['x-gemini-api-key'] as string) || req.body?.apiKey;
     const provider = (req.headers['x-ai-provider'] as string) || req.body?.provider || GEMINI_CONFIG.provider;
     const requestedModel = (req.headers['x-gemini-model'] as string) || req.body?.model || GEMINI_CONFIG.model;
+    const images: Array<{ id?: string; name?: string; mimeType: string; base64Data: string; sizeBytes?: number }> = req.body?.images || [];
     const ai = getGeminiClient(customKey);
 
     let rawMarkdown = '';
@@ -569,11 +571,15 @@ OUTPUT FORMAT (STRICT MARKDOWN):
 1. [Question 1]
 2. [Question 2]`;
 
+        const visualContextNote = images.length > 0
+          ? `\n\n[MULTIMODAL GROUNDING]: ${images.length} reference image(s) attached. Thoroughly examine visual features (composition, perspective, lighting, color harmony, subject details, artistic medium) and ground the master prompt firmly in these references according to user goals.`
+          : '';
+
         const userMessage = `OPTIMIZATION SPECIFICATIONS:
 - Target AI: ${targetAI}
 - Optimization Mode: ${mode}
 - Output Language: ${outputLang}
-- Prompt Style: ${promptStyle === 'Custom' ? `Custom (${customStyle})` : promptStyle}
+- Prompt Style: ${promptStyle === 'Custom' ? `Custom (${customStyle})` : promptStyle}${visualContextNote}
 
 USER RAW PROMPT TO REFINE:
 """
@@ -582,16 +588,32 @@ ${prompt}
 
 Please execute the Lyra 4D workflow and PCTCE+O framework to produce the final refined master prompt. Follow the strict four-section markdown format.`;
 
+        // Assemble multimodal parts with images and text
+        const userParts: any[] = [];
+        if (images.length > 0) {
+          for (const img of images) {
+            if (img.base64Data && img.mimeType) {
+              userParts.push({
+                inlineData: {
+                  mimeType: img.mimeType,
+                  data: img.base64Data,
+                },
+              });
+            }
+          }
+        }
+        userParts.push({ text: userMessage });
+
         const { response, usedModel: modelName } = await generateContentWithRetry(ai, {
           model: requestedModel,
           contents: [
             {
               role: 'user',
-              parts: [{ text: userMessage }],
+              parts: userParts,
             },
           ],
           config: {
-            systemInstruction,
+            systemInstruction: systemInstruction + (images.length > 0 ? `\n\nMULTIMODAL VISUAL DIRECTIVES:\nThe user has attached ${images.length} reference image(s). You must act as an expert computer vision and prompt engineer. Extract relevant visual characteristics (subject identity, pose, perspective, framing, lighting, color grading, artistic style, texture) and synthesize them seamlessly with the user's prompt instruction. Never ignore the user prompt; the user prompt dictates the goal, while the images provide the visual reference authority.` : ''),
             thinkingConfig: {
               thinkingLevel: mode === 'Expert Refine' ? 'high' : 'medium',
             },
@@ -624,6 +646,7 @@ Please execute the Lyra 4D workflow and PCTCE+O framework to produce the final r
 
     res.json({
       success: true,
+      imagesCount: images.length,
       rawMarkdown,
       targetAiMode: parsed.targetAiMode || `${targetAI} (${mode})`,
       optimizedPrompt: parsed.optimizedPrompt,

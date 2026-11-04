@@ -340,6 +340,7 @@ export async function refinePromptApi(
         outputLang: options.outputLang,
         promptStyle: options.promptStyle,
         customStyle: options.customStyle,
+        images: options.images,
       }),
     });
 
@@ -367,6 +368,7 @@ export async function refinePromptApi(
       },
       originalPrompt: prompt,
       options,
+      imagesCount: data.imagesCount !== undefined ? data.imagesCount : (options.images?.length || 0),
     };
   } catch (err: any) {
     clearTimeout(timeoutId);
@@ -396,6 +398,24 @@ ${options.targetAI} - ${options.promptStyle} (${options.mode})
 1. [Clarification question 1]
 2. [Clarification question 2]`;
 
+        const directParts: any[] = [];
+        if (options.images && options.images.length > 0) {
+          for (const img of options.images) {
+            if (img.base64Data && img.mimeType) {
+              directParts.push({
+                inline_data: {
+                  mime_type: img.mimeType,
+                  data: img.base64Data,
+                },
+              });
+            }
+          }
+        }
+        const visualDirective = options.images && options.images.length > 0
+          ? `\n\n[MULTIMODAL GROUNDING: ${options.images.length} reference image(s) provided. Synthesize visual details into the master prompt.]`
+          : '';
+        directParts.push({ text: `${directSystemPrompt}${visualDirective}\n\nRAW USER PROMPT TO OPTIMIZE:\n${prompt}` });
+
         const directRes = await fetch(
           `https://generativelanguage.googleapis.com/${GEMINI_CONFIG.apiVersion}/models/${targetModel}:generateContent?key=${customKey}`,
           {
@@ -405,7 +425,7 @@ ${options.targetAI} - ${options.promptStyle} (${options.mode})
               contents: [
                 {
                   role: 'user',
-                  parts: [{ text: `${directSystemPrompt}\n\nRAW USER PROMPT TO OPTIMIZE:\n${prompt}` }],
+                  parts: directParts,
                 },
               ],
             }),
@@ -437,6 +457,7 @@ ${options.targetAI} - ${options.promptStyle} (${options.mode})
                 'Apakah nada komunikasi ingin dibuat lebih kasual atau formal akademik?',
               ],
               engineUsed: `Gemini API (${targetModel})`,
+              imagesCount: options.images?.length || 0,
               metrics: {
                 originalWordCount: prompt.trim().split(/\s+/).length,
                 originalCharCount: prompt.length,
@@ -474,7 +495,8 @@ ${options.targetAI} - ${options.promptStyle} (${options.mode})
       rawMarkdown: local.rawMarkdown,
       targetAiMode: local.targetAiMode,
       optimizedPrompt: local.optimizedPrompt,
-      appliedTechniques: local.appliedTechniques,
+      appliedTechniques: options.images && options.images.length > 0 ? [...local.appliedTechniques, `Analisis Kontekstual ${options.images.length} Gambar Referensi Visual`] : local.appliedTechniques,
+      imagesCount: options.images?.length || 0,
       improvementQuestions: local.improvementQuestions,
       engineUsed: fallbackEngineName,
       metrics: {

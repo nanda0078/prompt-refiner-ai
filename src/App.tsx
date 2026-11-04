@@ -21,7 +21,7 @@ import { ResultDisplay } from './components/ResultDisplay';
 import { ApiKeyModal } from './components/ApiKeyModal';
 import { HistoryDrawer } from './components/HistoryDrawer';
 import { BlueprintModal } from './components/BlueprintModal';
-import { RefinerOptions, RefineResult, HistoryItem } from './types';
+import { RefinerOptions, RefineResult, HistoryItem, ImageAttachment } from './types';
 import { refinePromptApi, checkServerStatus, getStoredApiKey, getProviderApiKey, getActiveProvider, resetSessionApi, resetSessionId } from './services/api';
 
 const HISTORY_STORAGE_KEY = 'prompt_refiner_history_v1';
@@ -41,6 +41,7 @@ export default function App() {
 
   // Prompt input and settings state
   const [rawPrompt, setRawPrompt] = useState<string>('');
+  const [selectedImages, setSelectedImages] = useState<ImageAttachment[]>([]);
   const [options, setOptions] = useState<RefinerOptions>({
     targetAI: 'Auto Detect',
     mode: 'Advanced Refine',
@@ -134,7 +135,7 @@ export default function App() {
     }, 6500);
 
     try {
-      const result = await refinePromptApi(promptToRefine, options);
+      const result = await refinePromptApi(promptToRefine, { ...options, images: selectedImages });
       clearTimeout(step1);
       clearTimeout(step2);
       clearTimeout(step3);
@@ -312,6 +313,8 @@ export default function App() {
             onClear={() => setRawPrompt('')}
             onResetSession={handleHardReset}
             disabled={isLoading}
+            images={selectedImages}
+            onImagesChange={setSelectedImages}
           />
 
           {/* Optimization Controls */}
