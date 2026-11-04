@@ -62,6 +62,76 @@ function formatFileSize(bytes: number): string {
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 }
 
+function processImageFile(file: File): Promise<ImageAttachment> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error(`Gagal membaca file ${file.name}`));
+    reader.onload = () => {
+      const originalDataUrl = reader.result as string;
+      const img = new Image();
+      img.onerror = () => {
+        // Fallback: use raw data URL if canvas cannot decode
+        const base64Data = originalDataUrl.split(',')[1] || '';
+        resolve({
+          id: 'img-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7),
+          name: file.name,
+          mimeType: file.type || 'image/jpeg',
+          base64Data,
+          dataUrl: originalDataUrl,
+          sizeBytes: file.size,
+        });
+      };
+      img.onload = () => {
+        // Optimize large images to max 1920px keeping aspect ratio
+        const maxDim = 1920;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            const targetMime = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+            const optimizedDataUrl = canvas.toDataURL(targetMime, 0.88);
+            const base64Data = optimizedDataUrl.split(',')[1] || '';
+            resolve({
+              id: 'img-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7),
+              name: file.name,
+              mimeType: targetMime,
+              base64Data,
+              dataUrl: optimizedDataUrl,
+              sizeBytes: Math.round((base64Data.length * 3) / 4),
+            });
+            return;
+          }
+        }
+
+        const base64Data = originalDataUrl.split(',')[1] || '';
+        resolve({
+          id: 'img-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7),
+          name: file.name,
+          mimeType: file.type || 'image/jpeg',
+          base64Data,
+          dataUrl: originalDataUrl,
+          sizeBytes: file.size,
+        });
+      };
+      img.src = originalDataUrl;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 export const PromptInput: React.FC<PromptInputProps> = ({
   value,
   onChange,
@@ -92,47 +162,42 @@ export const PromptInput: React.FC<PromptInputProps> = ({
     onChange(sample.prompt);
   };
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const rawFiles = e.target.files;
+    if (!rawFiles || rawFiles.length === 0) return;
 
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
-    const maxSizeBytes = 10 * 1024 * 1024; // 10MB per file
-    const addedImages: ImageAttachment[] = [];
+    // Snapshot files into a standalone array immediately
+    const fileList = Array.from(rawFiles);
 
-    Array.from(files).forEach((file) => {
-      if (!allowedTypes.includes(file.type.toLowerCase())) {
-        alert(`Format ${file.name} tidak didukung. Harap gunakan format JPG, PNG, atau WEBP.`);
-        return;
-      }
-      if (file.size > maxSizeBytes) {
-        alert(`Ukuran file ${file.name} melebihi batas 10MB.`);
-        return;
-      }
-
-      const reader = new FileReader();
-      reader.onload = () => {
-        const result = reader.result as string;
-        const base64Data = result.split(',')[1] || '';
-        addedImages.push({
-          id: 'img-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7),
-          name: file.name,
-          mimeType: file.type,
-          base64Data,
-          dataUrl: result,
-          sizeBytes: file.size,
-        });
-
-        // Update once all files in batch have finished reading
-        if (addedImages.length === Array.from(files).filter(f => allowedTypes.includes(f.type.toLowerCase()) && f.size <= maxSizeBytes).length) {
-          onImagesChange?.([...images, ...addedImages]);
-        }
-      };
-      reader.readAsDataURL(file);
-    });
-
-    // Reset input so same file can be picked again if desired
+    // Reset input value so the same file can be selected again in the future
     e.target.value = '';
+
+    const validFiles: File[] = [];
+    for (const file of fileList) {
+      const ext = file.name.slice(file.name.lastIndexOf('.')).toLowerCase();
+      const isImage =
+        file.type.startsWith('image/') ||
+        ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp'].includes(ext);
+      if (!isImage) {
+        alert(`File "${file.name}" bukan format gambar yang didukung (JPG, PNG, WEBP).`);
+        continue;
+      }
+      if (file.size > 20 * 1024 * 1024) {
+        alert(`File "${file.name}" terlalu besar (maksimal 20MB).`);
+        continue;
+      }
+      validFiles.push(file);
+    }
+
+    if (validFiles.length === 0) return;
+
+    try {
+      const processed = await Promise.all(validFiles.map(processImageFile));
+      onImagesChange?.([...images, ...processed]);
+    } catch (err: any) {
+      console.error('Gagal memproses gambar:', err);
+      alert('Terjadi kesalahan saat membaca gambar referensi: ' + (err?.message || 'Gagal membaca file'));
+    }
   };
 
   const handleRemoveImage = (id: string) => {
