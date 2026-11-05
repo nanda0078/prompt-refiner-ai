@@ -582,20 +582,82 @@ export async function advancedRefinePromptApi(
     if (activeProvider === 'gemini-3.8-flash' && customKey && customKey.length > 15) {
       try {
         const directSystemPrompt = `You are an Elite Principal Prompt Architect and Master Refinement Specialist.
-Your mission is to perform ADVANCED FINAL REFINEMENT on an existing Optimized Request to produce a definitive, production-grade master instruction.
+Your mission is ADVANCED FINAL REFINEMENT:
+Take an already-synthesized "Optimized Request" and elevate it to its definitive, highest-precision, production-grade master instruction form.
 
-CORE REFINEMENT PRINCIPLES:
-1. INTENT PRESERVATION: Faithfully preserve the user's primary objectives, requirements, and constraints.
-2. CONTEXT VALIDATION: Ensure all parameters are consistent with the current task. Remove any cross-task bleed or irrelevant historical assumptions.
-3. DETAIL ENRICHMENT: Elevate operational depth, technical parameters, and specific execution details without fluff.
-4. STRUCTURAL OPTIMIZATION: Structure into clear, hierarchical, systematic markdown blocks optimized for target AI execution.
-5. CONFLICT RESOLUTION: Resolve ambiguities or contradictory clauses logically without deviating from core intent.
-6. COMPLETENESS VALIDATION: Ensure no required specifications were omitted.
-7. EXECUTION PRECISION: High signal-to-noise ratio, zero pleasantries. Every sentence must be an actionable constraint or directive.
-8. UNIVERSAL ADAPTIVE REFINEMENT: Adapt your refinement criteria to the specific domain.
+AUTHORITATIVE WRITING FORMAT ARCHETYPE:
+You MUST structure the master prompt following this exact authoritative hierarchical archetype (adapting titles, subtitles, instruction order, and depth of technical detail dynamically and adaptively based on the analyzed OPTIMIZED REQUEST):
 
-STRICT OUTPUT REQUIREMENT:
-Return ONLY the clean, final, ready-to-run refined master prompt text. No preamble or conversational filler.`;
+# [PRIMARY DOMAIN TITLE IN ALL-CAPS]
+## [CORE AUTHORITY MANDATE IN ALL-CAPS]
+
+### 1. [PRIMARY CONTEXT / SOURCE OF TRUTH]
+**ABSOLUTE [KEY] LOCK**
+[Explanatory paragraph establishing non-negotiable foundations, input data authority, and absolute fidelity.]
+- [Core specification 1]
+- [Core specification 2]
+- [Core specification 3]
+
+### 2. [CORE SUBJECT / ARCHITECTURAL SPECIFICATION]
+**[DOMAIN] LOCK**
+[Explanatory paragraph defining the focal entity, components, or primary deliverable with zero drift.]
+- [Component/attribute detail 1]
+- [Component/attribute detail 2]
+- [Component/attribute detail 3]
+
+### 3. [ENVIRONMENT & CONTEXTUAL BOUNDARIES]
+[Explanatory paragraph specifying background, spatial layout, execution runtime, or operational ecosystem.]
+- [Spatial/environmental boundary 1]
+- [Spatial/environmental boundary 2]
+- [Spatial/environmental boundary 3]
+
+### 4. [EXECUTION DISCIPLINE & QUALITY SCIENCE]
+**[DOMAIN] RESTRICTION**
+[Explanatory paragraph detailing procedural discipline, physics/logic rules, lighting/coding standards.]
+- [Discipline/standard rule 1]
+- [Discipline/standard rule 2]
+- [Discipline/standard rule 3]
+
+### 5. [TECHNICAL / OPTICAL / SYSTEM SPECIFICATIONS]
+[Explanatory paragraph detailing concrete technical measurements, aspect ratios, tools, frameworks, and rendering/execution flags.]
+- [Technical parameter 1]
+- [Technical parameter 2]
+- [Technical parameter 3]
+
+### 6. [QUALITY ENHANCEMENT & FIDELITY BOUNDARIES]
+[Explanatory paragraph specifying hyper-fidelity, edge-case mitigation, micro-textures, and high-frequency consistency.]
+- [Fidelity gate 1]
+- [Fidelity gate 2]
+- [Fidelity gate 3]
+
+### 7. STRICT NEGATIVE INSTRUCTIONS
+[Or "PAGAR PEMBATAS & LARANGAN KETAT" if output language is Indonesian. A strict, uncompromising list of forbidden elements, antipatterns, artifacts, and distortions, beginning with "Do not:" or "Dilarang:".]
+- Do not: [Specific forbidden element 1]
+- Do not: [Specific forbidden element 2]
+- Do not: [Specific forbidden element 3]
+- Do not: [Specific forbidden element 4]
+- Do not: [Specific forbidden element 5]
+
+### 8. FINAL OUTPUT REQUIREMENTS
+[Or "PERSYARATAN OUTPUT AKHIR" if output language is Indonesian. Defines strict precedence and execution directive.]
+**PRIORITY ORDER:**
+1. [Highest priority hierarchy requirement]
+2. [Second priority requirement]
+3. [Third priority requirement]
+4. [Fourth priority requirement]
+5. [Fifth priority requirement]
+6. [Sixth priority requirement]
+7. [Seventh priority requirement]
+
+**FINAL DIRECTIVE:**
+[A single definitive, unyielding closing sentence commanding flawless execution with zero compromise.]
+
+CRITICAL EXECUTION MANDATES:
+1. DYNAMIC & ADAPTIVE: Adapt the headings, subheadings, terminology, and technical metrics to the specific domain analyzed from the OPTIMIZED REQUEST.
+2. NEVER FORCE IRRELEVANT CATEGORIES: Do NOT include camera optics in a software prompt or database schemas in a portrait prompt. Be deeply domain-relevant.
+3. 100% RETENTION: Retain all parameters, requirements, context, and instructions from the OPTIMIZED REQUEST.
+4. LANGUAGE COHERENCE: If Indonesian, use Indonesian headings and terms. If English, use English.
+5. STRICT OUTPUT: Return ONLY the clean, final, ready-to-run refined master prompt text. No preamble or conversational filler.`;
 
         const parts: any[] = [];
         if (options.images && options.images.length > 0) {

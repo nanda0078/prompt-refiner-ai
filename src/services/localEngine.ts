@@ -1,3 +1,5 @@
+import { generateStructuredAdvancedRefinement } from './structuredRefinement';
+
 // Pure client-side PCTCE+O & Lyra 4D Engine
 // Guarantees 100% standalone execution for GitHub Pages & Android APK
 
@@ -210,111 +212,13 @@ export function generateClientAdvancedRefinement(
   promptStyle: string = 'Image Generation',
   customStyle?: string
 ): { refinedPrompt: string; engineUsed: string } {
-  const isId = outputLang === 'Indonesia' || outputLang === 'Auto Detect';
-  const cleanBase = optimizedPrompt.trim();
-  const lowerBase = (cleanBase + ' ' + (originalPrompt || '')).toLowerCase();
-
-  // Detect category domain
-  const isVisual = promptStyle === 'Image Generation' || lowerBase.includes('gambar') || lowerBase.includes('foto') || lowerBase.includes('portrait') || lowerBase.includes('visual');
-  const isCode = promptStyle === 'Coding & Development' || lowerBase.includes('kode') || lowerBase.includes('aplikasi') || lowerBase.includes('react') || lowerBase.includes('function') || lowerBase.includes('bug');
-  const isWriting = promptStyle === 'Writing & Content' || lowerBase.includes('artikel') || lowerBase.includes('naskah') || lowerBase.includes('cerita');
-  const isMarketing = promptStyle === 'Business & Marketing' || lowerBase.includes('iklan') || lowerBase.includes('promosi') || lowerBase.includes('marketing');
-  const isData = promptStyle === 'Data Analysis' || lowerBase.includes('data') || lowerBase.includes('analisis') || lowerBase.includes('metrik');
-
-  let specializedEnrichment = '';
-
-  if (isVisual) {
-    specializedEnrichment = isId
-      ? `### 📐 SPESIFIKASI VISUAL & OPTIK TINGKAT LANJUT
-- Rasio Aspek (Aspect Ratio): Terkalibrasi 16:9 sinematik atau 9:16 potret resolusi ultra-tinggi (8K UHD).
-- Lensa & Optik: 85mm f/1.4 prime lens, shallow depth-of-field, aperture lembut dengan efek bokeh melingkar halus pada latar belakang.
-- Pencahayaan (Lighting Science): Kombinasi three-point studio lighting dengan Rembrandt key light, subtle rim light pada kontur subjek, dan soft volumetric fill light.
-- Tekstur & Materialitas: Detail mikro tekstur kulit natural dengan subsurface scattering nyata (tanpa efek plastik atau airbrushed), helai rambut tajam, dan kejernihan mata dengan tangkapan cahaya (catchlight) natural.
-- Color Grading & Mood: Palet warna sinematik terkalibrasi kodachrome 64/cinestill 800T, dynamic range luas, bayangan bersih tanpa noise digital.
-- Pagar Pembatas Negatif (Negative Guardrails): Zero-distortion, no mutated limbs, no extra fingers, no blurry artifacts, no watermark, no CGI/plastic glossiness.`
-      : `### 📐 ADVANCED OPTICAL & VISUAL SPECIFICATIONS
-- Aspect Ratio: Native 16:9 cinematic or 9:16 portrait composition, 8K ultra-sharp fidelity.
-- Optics & Focal Length: 85mm f/1.4 prime lens, shallow depth-of-field, organic circular bokeh on background highlights.
-- Lighting Science: Balanced three-point illumination, Rembrandt key light, delicate hair rim light, soft ambient fill.
-- Materiality & Texture: Natural skin micro-texture with authentic subsurface scattering (zero plastic airbrushing), realistic iris catchlight, and textile micro-weave.
-- Color Science: Film-stock emulation (Kodachrome 64/Cinestill 800T), extended dynamic range, clean deep blacks.
-- Negative Guardrails: Zero anatomical distortion, no unnatural limb multiplication, no watermarks, no blur artifacts.`;
-  } else if (isCode) {
-    specializedEnrichment = isId
-      ? `### 🛡️ KONTRAK REKAYASA & PREVENTIF EDGE-CASE
-- Integritas Arsitektur: Pola pemisahan tanggung jawab (Separation of Concerns), modularitas komponen, dan type-safe end-to-end.
-- Penanganan Kondisi Batas (Edge Cases): Validasi input defensif (null/undefined/empty state), error boundary terisolasi, dan status loading/retry yang jelas.
-- Standar Eksekusi: Clean Code, fungsi murni (pure functions) di mana memungkinkan, nama variabel deskriptif tanpa singkatan ambigu.
-- Kriteria Verifikasi: Kode harus dapat dikompilasi tanpa peringatan (zero warnings), lulus verifikasi tipe statis, dan menyertakan contoh penggunaan nyata.`
-      : `### 🛡️ ENGINEERING CONTRACT & DEFENSIVE INVARIANTS
-- Architecture Integrity: Strict separation of concerns, high cohesion, end-to-end type safety.
-- Edge-Case Resilience: Defensive validation against null/undefined/empty bounds, explicit error recovery, and robust status management.
-- Execution Quality: Clean Code conventions, pure deterministic functions, and production-grade maintainability.
-- Verification Gate: Zero build warnings, complete type coverage, and actionable executable snippets.`;
-  } else if (isWriting) {
-    specializedEnrichment = isId
-      ? `### ✍️ KONTROL NARASI & ENGAGEMENT
-- Arsitektur Narasi: Hook awal berdaya pikat tinggi -> Eskalasi pemikiran terstruktur -> Pembahasan mendalam berbobot -> Konklusi berdampak kuat.
-- Dinamika Gaya: Kalimat bervariasi (rhythm & cadence), eliminasi frasa klise, dan pemilihan diksi yang bernas.
-- Retensi Pembaca: Pertahankan alur logis yang mulus antar-paragraf dengan transisi alami.`
-      : `### ✍️ NARRATIVE ARCHITECTURE & ENGAGEMENT
-- Structural Flow: High-impact opening hook -> Systematic thematic development -> Deep intellectual value -> Resonant takeaway.
-- Pacing & Rhythm: Alternating sentence lengths, active voice dominance, and zero repetitive filler.
-- Reader Retention: Seamless logical transitions and emotional resonance.`;
-  } else if (isMarketing) {
-    specializedEnrichment = isId
-      ? `### 🎯 STRATEGI KONVERSI & VALUE PROPOSITION
-- Core Hook: Menjawab langsung titik sakit (pain-point) utama audiens dalam 3 detik pertama.
-- Diferensiasi Tajam: Buktikan nilai unik tanpa klaim berlebihan (evidence-backed credibility).
-- Call-to-Action (CTA): Instruksi tindakan tunggal, jelas, mendesak, dan minim friksi.`
-      : `### 🎯 CONVERSION CATALYST & VALUE PROPOSITION
-- Core Hook: Immediately resolves the user's primary friction point in the opening statement.
-- Sharp Differentiation: Concrete value positioning supported by credible evidence.
-- Frictionless CTA: Single, clear, unambiguous directive maximizing execution velocity.`;
-  } else if (isData) {
-    specializedEnrichment = isId
-      ? `### 📊 FRAMEWORK ANALITIK & KAUSALITAS
-- Taksonomi Metrik: Klasifikasi variabel primer, sekunder, dan variabel pengendali.
-- Identifikasi Tren: Pisahkan anomali sementara dari pola kausal yang terbukti.
-- Rekomendasi Eksekutif: Simpulan actionable dengan pembobotan prioritas berbasis dampak.`
-      : `### 📊 ANALYTICAL DECOMPOSITION & CAUSALITY
-- Metric Taxonomy: Clear segregation of primary KPIs, control variables, and secondary indicators.
-- Causal Rigor: Isolate transient noise from genuine behavioral shifts.
-- Executive Decision Matrix: Actionable takeaways ranked strictly by business impact.`;
-  } else {
-    specializedEnrichment = isId
-      ? `### ⚡ PROTOKOL PRESISI EKSEKUSI
-- Dekomposisi Sistematis: Eksekusi setiap tahapan secara hierarkis dan deterministik.
-- Eliminasi Ambiguitas: Semua parameter memiliki batasan operasional yang jelas tanpa ruang interpretasi ganda.
-- Verifikasi Akhir: Hasil wajib memenuhi seluruh kriteria kelengkapan fungsional.`
-      : `### ⚡ DETERMINISTIC EXECUTION PROTOCOL
-- Systematic Decomposition: Hierarchical, stepwise instruction execution.
-- Zero-Ambiguity Guardrail: All operational boundaries explicitly defined.
-- Verification Criteria: Output strictly evaluated against end-to-end completeness.`;
-  }
-
-  const refinedPrompt = `# ADVANCED FINAL REFINEMENT: DEFINITIVE MASTER SPECIFICATION
-[CONFIRMED OBJECTIVE]: ${cleanBase.split('\n')[0].replace(/^[#\s*]+/, '') || 'High-Precision Task Execution'}
-
-## 1. OPERATIONAL CONTEXT & EXECUTION SCOPE
-- Target AI System: ${targetAI}
-- Execution Mode: ${mode} (Maximum Determinism)
-- Output Language: ${outputLang}
-- Architectural Integrity: PCTCE+O & Lyra 4D Certified
-
-## 2. SYNTHESIZED MASTER DIRECTIVES
-${cleanBase}
-
-## 3. UNIVERSAL ADAPTIVE ENRICHMENT & QUALITY GATES
-${specializedEnrichment}
-
-## 4. STRICT OUTPUT FORMAT & CONFLICT RESOLUTION
-- Zero Conversational Meta: Mulai langsung pada output yang diminta tanpa kalimat pengantar atau penutup.
-- Self-Consistency Check: Jika terdapat instruksi ambigu, pilih interpretasi yang paling aman dan operasional.
-- High Signal-to-Noise: Pertahankan efisiensi token maksimal tanpa mengorbankan kedalaman teknis.`;
-
-  return {
-    refinedPrompt,
-    engineUsed: 'Engine AI Studio PCTCE+O (Universal Adaptive Refiner)',
-  };
+  return generateStructuredAdvancedRefinement(
+    optimizedPrompt,
+    originalPrompt,
+    targetAI,
+    mode,
+    outputLang,
+    promptStyle,
+    customStyle
+  );
 }
