@@ -1,3 +1,4 @@
+import { generateStructuredAdvancedRefinement } from "./src/services/structuredRefinement";
 import express from "express";
 import dotenv from "dotenv";
 import path from "path";
@@ -170,7 +171,7 @@ app.post("/api/test-connection", async (req, res) => {
     const providerDisplayName = provider === "gemini-3.8-flash" || provider === "gemini" ? `Gemini API (${usedModel})` : "Engine AI Studio PCTCE+O";
     res.json({
       success: true,
-      imagesCount: images.length,
+      imagesCount: 0,
       latency,
       reply: reply.trim(),
       model: usedModel,
@@ -422,7 +423,7 @@ app.post("/api/refine", async (req, res) => {
     const customKey = req.headers["x-gemini-api-key"] || req.body?.apiKey;
     const provider = req.headers["x-ai-provider"] || req.body?.provider || GEMINI_CONFIG.provider;
     const requestedModel = req.headers["x-gemini-model"] || req.body?.model || GEMINI_CONFIG.model;
-    const images2 = req.body?.images || [];
+    const images = req.body?.images || [];
     const ai = getGeminiClient(customKey);
     let rawMarkdown = "";
     let usedModel = "";
@@ -457,9 +458,9 @@ OUTPUT FORMAT (STRICT MARKDOWN):
 ### \u{1F50D} Improvement Questions
 1. [Question 1]
 2. [Question 2]`;
-        const visualContextNote = images2.length > 0 ? `
+        const visualContextNote = images.length > 0 ? `
 
-[MULTIMODAL GROUNDING]: ${images2.length} reference image(s) attached. Thoroughly examine visual features (composition, perspective, lighting, color harmony, subject details, artistic medium) and ground the master prompt firmly in these references according to user goals.` : "";
+[MULTIMODAL GROUNDING]: ${images.length} reference image(s) attached. Thoroughly examine visual features (composition, perspective, lighting, color harmony, subject details, artistic medium) and ground the master prompt firmly in these references according to user goals.` : "";
         const userMessage = `OPTIMIZATION SPECIFICATIONS:
 - Target AI: ${targetAI}
 - Optimization Mode: ${mode}
@@ -473,8 +474,8 @@ ${prompt}
 
 Please execute the Lyra 4D workflow and PCTCE+O framework to produce the final refined master prompt. Follow the strict four-section markdown format.`;
         const userParts = [];
-        if (images2.length > 0) {
-          for (const img of images2) {
+        if (images.length > 0) {
+          for (const img of images) {
             if (img.base64Data && img.mimeType) {
               userParts.push({
                 inlineData: {
@@ -495,10 +496,10 @@ Please execute the Lyra 4D workflow and PCTCE+O framework to produce the final r
             }
           ],
           config: {
-            systemInstruction: systemInstruction + (images2.length > 0 ? `
+            systemInstruction: systemInstruction + (images.length > 0 ? `
 
 MULTIMODAL VISUAL DIRECTIVES:
-The user has attached ${images2.length} reference image(s). You must act as an expert computer vision and prompt engineer. Extract relevant visual characteristics (subject identity, pose, perspective, framing, lighting, color grading, artistic style, texture) and synthesize them seamlessly with the user's prompt instruction. Never ignore the user prompt; the user prompt dictates the goal, while the images provide the visual reference authority.` : ""),
+The user has attached ${images.length} reference image(s). You must act as an expert computer vision and prompt engineer. Extract relevant visual characteristics (subject identity, pose, perspective, framing, lighting, color grading, artistic style, texture) and synthesize them seamlessly with the user's prompt instruction. Never ignore the user prompt; the user prompt dictates the goal, while the images provide the visual reference authority.` : ""),
             thinkingConfig: {
               thinkingLevel: mode === "Expert Refine" ? "high" : "medium"
             }
@@ -525,7 +526,7 @@ The user has attached ${images2.length} reference image(s). You must act as an e
     const refinedChars = parsed.optimizedPrompt ? parsed.optimizedPrompt.length : 0;
     res.json({
       success: true,
-      imagesCount: images2.length,
+      imagesCount: images.length,
       rawMarkdown,
       targetAiMode: parsed.targetAiMode || `${targetAI} (${mode})`,
       optimizedPrompt: parsed.optimizedPrompt,
@@ -550,95 +551,15 @@ The user has attached ${images2.length} reference image(s). You must act as an e
   }
 });
 function generateServerLocalAdvancedRefinement(optimizedPrompt, originalPrompt = "", targetAI = "ChatGPT", mode = "Advanced Refine", outputLang = "English", promptStyle = "Image Generation", customStyle) {
-  const isId = outputLang === "Indonesia" || outputLang === "Auto Detect";
-  const cleanBase = optimizedPrompt.trim();
-  const lowerBase = (cleanBase + " " + (originalPrompt || "")).toLowerCase();
-  const isVisual = promptStyle === "Image Generation" || lowerBase.includes("gambar") || lowerBase.includes("foto") || lowerBase.includes("portrait") || lowerBase.includes("visual");
-  const isCode = promptStyle === "Coding & Development" || lowerBase.includes("kode") || lowerBase.includes("aplikasi") || lowerBase.includes("react") || lowerBase.includes("bug");
-  const isWriting = promptStyle === "Writing & Content" || lowerBase.includes("artikel") || lowerBase.includes("naskah") || lowerBase.includes("cerita");
-  const isMarketing = promptStyle === "Business & Marketing" || lowerBase.includes("iklan") || lowerBase.includes("promosi") || lowerBase.includes("marketing");
-  const isData = promptStyle === "Data Analysis" || lowerBase.includes("data") || lowerBase.includes("analisis");
-  let specializedEnrichment = "";
-  if (isVisual) {
-    specializedEnrichment = isId ? `### \u{1F4D0} SPESIFIKASI VISUAL & OPTIK TINGKAT LANJUT
-- Rasio Aspek (Aspect Ratio): Terkalibrasi 16:9 sinematik atau 9:16 potret resolusi ultra-tinggi (8K UHD).
-- Lensa & Optik: 85mm f/1.4 prime lens, shallow depth-of-field, aperture lembut dengan efek bokeh melingkar halus pada latar belakang.
-- Pencahayaan (Lighting Science): Kombinasi three-point studio lighting dengan Rembrandt key light, subtle rim light pada kontur subjek, dan soft volumetric fill light.
-- Tekstur & Materialitas: Detail mikro tekstur kulit natural dengan subsurface scattering nyata (tanpa efek plastik atau airbrushed), helai rambut tajam, dan kejernihan mata dengan tangkapan cahaya (catchlight) natural.
-- Color Grading & Mood: Palet warna sinematik terkalibrasi kodachrome 64/cinestill 800T, dynamic range luas, bayangan bersih tanpa noise digital.
-- Pagar Pembatas Negatif (Negative Guardrails): Zero-distortion, no mutated limbs, no extra fingers, no blurry artifacts, no watermark, no CGI/plastic glossiness.` : `### \u{1F4D0} ADVANCED OPTICAL & VISUAL SPECIFICATIONS
-- Aspect Ratio: Native 16:9 cinematic or 9:16 portrait composition, 8K ultra-sharp fidelity.
-- Optics & Focal Length: 85mm f/1.4 prime lens, shallow depth-of-field, organic circular bokeh on background highlights.
-- Lighting Science: Balanced three-point illumination, Rembrandt key light, delicate hair rim light, soft ambient fill.
-- Materiality & Texture: Natural skin micro-texture with authentic subsurface scattering (zero plastic airbrushing), realistic iris catchlight, and textile micro-weave.
-- Color Science: Film-stock emulation (Kodachrome 64/Cinestill 800T), extended dynamic range, clean deep blacks.
-- Negative Guardrails: Zero anatomical distortion, no unnatural limb multiplication, no watermarks, no blur artifacts.`;
-  } else if (isCode) {
-    specializedEnrichment = isId ? `### \u{1F6E1}\uFE0F KONTRAK REKAYASA & PREVENTIF EDGE-CASE
-- Integritas Arsitektur: Pola pemisahan tanggung jawab (Separation of Concerns), modularitas komponen, dan type-safe end-to-end.
-- Penanganan Kondisi Batas (Edge Cases): Validasi input defensif (null/undefined/empty state), error boundary terisolasi, dan status loading/retry yang jelas.
-- Standar Eksekusi: Clean Code, fungsi murni (pure functions) di mana memungkinkan, nama variabel deskriptif tanpa singkatan ambigu.
-- Kriteria Verifikasi: Kode harus dapat dikompilasi tanpa peringatan (zero warnings), lulus verifikasi tipe statis, dan menyertakan contoh penggunaan nyata.` : `### \u{1F6E1}\uFE0F ENGINEERING CONTRACT & DEFENSIVE INVARIANTS
-- Architecture Integrity: Strict separation of concerns, high cohesion, end-to-end type safety.
-- Edge-Case Resilience: Defensive validation against null/undefined/empty bounds, explicit error recovery, and robust status management.
-- Execution Quality: Clean Code conventions, pure deterministic functions, and production-grade maintainability.
-- Verification Gate: Zero build warnings, complete type coverage, and actionable executable snippets.`;
-  } else if (isWriting) {
-    specializedEnrichment = isId ? `### \u270D\uFE0F KONTROL NARASI & ENGAGEMENT
-- Arsitektur Narasi: Hook awal berdaya pikat tinggi -> Eskalasi pemikiran terstruktur -> Pembahasan mendalam berbobot -> Konklusi berdampak kuat.
-- Dinamika Gaya: Kalimat bervariasi (rhythm & cadence), eliminasi frasa klise, dan pemilihan diksi yang bernas.
-- Retensi Pembaca: Pertahankan alur logis yang mulus antar-paragraf dengan transisi alami.` : `### \u270D\uFE0F NARRATIVE ARCHITECTURE & ENGAGEMENT
-- Structural Flow: High-impact opening hook -> Systematic thematic development -> Deep intellectual value -> Resonant takeaway.
-- Pacing & Rhythm: Alternating sentence lengths, active voice dominance, and zero repetitive filler.
-- Reader Retention: Seamless logical transitions and emotional resonance.`;
-  } else if (isMarketing) {
-    specializedEnrichment = isId ? `### \u{1F3AF} STRATEGI KONVERSI & VALUE PROPOSITION
-- Core Hook: Menjawab langsung titik sakit (pain-point) utama audiens dalam 3 detik pertama.
-- Diferensiasi Tajam: Buktikan nilai unik tanpa klaim berlebihan (evidence-backed credibility).
-- Call-to-Action (CTA): Instruksi tindakan tunggal, jelas, mendesak, dan minim friksi.` : `### \u{1F3AF} CONVERSION CATALYST & VALUE PROPOSITION
-- Core Hook: Immediately resolves the user's primary friction point in the opening statement.
-- Sharp Differentiation: Concrete value positioning supported by credible evidence.
-- Frictionless CTA: Single, clear, unambiguous directive maximizing execution velocity.`;
-  } else if (isData) {
-    specializedEnrichment = isId ? `### \u{1F4CA} FRAMEWORK ANALITIK & KAUSALITAS
-- Taksonomi Metrik: Klasifikasi variabel primer, sekunder, dan variabel pengendali.
-- Identifikasi Tren: Pisahkan anomali sementara dari pola kausal yang terbukti.
-- Rekomendasi Eksekutif: Simpulan actionable dengan pembobotan prioritas berbasis dampak.` : `### \u{1F4CA} ANALYTICAL DECOMPOSITION & CAUSALITY
-- Metric Taxonomy: Clear segregation of primary KPIs, control variables, and secondary indicators.
-- Causal Rigor: Isolate transient noise from genuine behavioral shifts.
-- Executive Decision Matrix: Actionable takeaways ranked strictly by business impact.`;
-  } else {
-    specializedEnrichment = isId ? `### \u26A1 PROTOKOL PRESISI EKSEKUSI
-- Dekomposisi Sistematis: Eksekusi setiap tahapan secara hierarkis dan deterministik.
-- Eliminasi Ambiguitas: Semua parameter memiliki batasan operasional yang jelas tanpa ruang interpretasi ganda.
-- Verifikasi Akhir: Hasil wajib memenuhi seluruh kriteria kelengkapan fungsional.` : `### \u26A1 DETERMINISTIC EXECUTION PROTOCOL
-- Systematic Decomposition: Hierarchical, stepwise instruction execution.
-- Zero-Ambiguity Guardrail: All operational boundaries explicitly defined.
-- Verification Criteria: Output strictly evaluated against end-to-end completeness.`;
-  }
-  const refinedPrompt = `# ADVANCED FINAL REFINEMENT: DEFINITIVE MASTER SPECIFICATION
-[CONFIRMED OBJECTIVE]: ${cleanBase.split("\n")[0].replace(/^[#\s*]+/, "") || "High-Precision Task Execution"}
-
-## 1. OPERATIONAL CONTEXT & EXECUTION SCOPE
-- Target AI System: ${targetAI}
-- Execution Mode: ${mode} (Maximum Determinism)
-- Output Language: ${outputLang}
-- Architectural Integrity: PCTCE+O & Lyra 4D Certified
-
-## 2. SYNTHESIZED MASTER DIRECTIVES
-${cleanBase}
-
-## 3. UNIVERSAL ADAPTIVE ENRICHMENT & QUALITY GATES
-${specializedEnrichment}
-
-## 4. STRICT OUTPUT FORMAT & CONFLICT RESOLUTION
-- Zero Conversational Meta: Mulai langsung pada output yang diminta tanpa kalimat pengantar atau penutup.
-- Self-Consistency Check: Jika terdapat instruksi ambigu, pilih interpretasi yang paling aman dan operasional.
-- High Signal-to-Noise: Pertahankan efisiensi token maksimal tanpa mengorbankan kedalaman teknis.`;
-  return {
-    refinedPrompt,
-    engineUsed: "Engine AI Studio PCTCE+O (Universal Adaptive Refiner)"
-  };
+  return generateStructuredAdvancedRefinement(
+    optimizedPrompt,
+    originalPrompt,
+    targetAI,
+    mode,
+    outputLang,
+    promptStyle,
+    customStyle
+  );
 }
 app.post("/api/advanced-refine", async (req, res) => {
   try {
@@ -650,7 +571,7 @@ app.post("/api/advanced-refine", async (req, res) => {
       outputLang = "English",
       promptStyle = "Image Generation",
       customStyle = "",
-      images: images2 = []
+      images = []
     } = req.body;
     if (!optimizedPrompt || typeof optimizedPrompt !== "string" || !optimizedPrompt.trim()) {
       return res.status(400).json({
@@ -668,26 +589,86 @@ app.post("/api/advanced-refine", async (req, res) => {
     let usedModel = "";
     if (ai) {
       try {
-        const advancedSystemInstruction = `You are an Elite Principal Prompt Architect and Universal Prompt Refinement Specialist.
+        const advancedSystemInstruction = `You are an Elite Principal Prompt Architect and Master Refinement Specialist.
 Your mission is ADVANCED FINAL REFINEMENT:
 Take an already-synthesized "Optimized Request" and elevate it to its definitive, highest-precision, production-grade master instruction form.
 
-CORE REFINEMENT PRINCIPLES:
-1. INTENT PRESERVATION: Faithfully preserve the user's primary objectives, constraints, and target outcomes.
-2. CONTEXT VALIDATION: Ensure all parameters are consistent with the current task. Eliminate irrelevant cross-session assumptions.
-3. DETAIL ENRICHMENT: Elevate operational depth, technical parameters, and execution specifications without conversational fluff.
-4. STRUCTURAL OPTIMIZATION: Organize into clear, hierarchical, systematic markdown blocks optimized for target AI execution.
-5. CONFLICT RESOLUTION: Resolve ambiguities or contradictory clauses logically without deviating from core intent.
-6. COMPLETENESS VALIDATION: Ensure no required specifications were omitted.
-7. EXECUTION PRECISION: High signal-to-noise ratio. Zero meta commentary or pleasantries. Every sentence must be an actionable constraint or directive.
-8. UNIVERSAL ADAPTIVE REFINEMENT: Adapt your refinement criteria to the specific domain (e.g. Photography/Image generation optics & aspect ratio; Coding architectural boundaries & error handling; Writing tone & narrative pacing; Data analysis metric causality; UI/UX layout & component hierarchies).
+AUTHORITATIVE WRITING FORMAT ARCHETYPE:
+You MUST structure the master prompt following this exact authoritative hierarchical archetype (adapting titles, subtitles, instruction order, and depth of technical detail dynamically and adaptively based on the analyzed OPTIMIZED REQUEST):
 
-STRICT OUTPUT REQUIREMENT:
-Output ONLY the clean, final, ready-to-run refined master prompt text.
-DO NOT include any conversational meta-commentary, introductory remarks ("Here is your refined prompt:"), or concluding summaries.`;
+# [PRIMARY DOMAIN TITLE IN ALL-CAPS]
+## [CORE AUTHORITY MANDATE IN ALL-CAPS]
+
+### 1. [PRIMARY CONTEXT / SOURCE OF TRUTH]
+**ABSOLUTE [KEY] LOCK**
+[Explanatory paragraph establishing non-negotiable foundations, input data authority, and absolute fidelity.]
+- [Core specification 1]
+- [Core specification 2]
+- [Core specification 3]
+
+### 2. [CORE SUBJECT / ARCHITECTURAL SPECIFICATION]
+**[DOMAIN] LOCK**
+[Explanatory paragraph defining the focal entity, components, or primary deliverable with zero drift.]
+- [Component/attribute detail 1]
+- [Component/attribute detail 2]
+- [Component/attribute detail 3]
+
+### 3. [ENVIRONMENT & CONTEXTUAL BOUNDARIES]
+[Explanatory paragraph specifying background, spatial layout, execution runtime, or operational ecosystem.]
+- [Spatial/environmental boundary 1]
+- [Spatial/environmental boundary 2]
+- [Spatial/environmental boundary 3]
+
+### 4. [EXECUTION DISCIPLINE & QUALITY SCIENCE]
+**[DOMAIN] RESTRICTION**
+[Explanatory paragraph detailing procedural discipline, physics/logic rules, lighting/coding standards.]
+- [Discipline/standard rule 1]
+- [Discipline/standard rule 2]
+- [Discipline/standard rule 3]
+
+### 5. [TECHNICAL / OPTICAL / SYSTEM SPECIFICATIONS]
+[Explanatory paragraph detailing concrete technical measurements, aspect ratios, tools, frameworks, and rendering/execution flags.]
+- [Technical parameter 1]
+- [Technical parameter 2]
+- [Technical parameter 3]
+
+### 6. [QUALITY ENHANCEMENT & FIDELITY BOUNDARIES]
+[Explanatory paragraph specifying hyper-fidelity, edge-case mitigation, micro-textures, and high-frequency consistency.]
+- [Fidelity gate 1]
+- [Fidelity gate 2]
+- [Fidelity gate 3]
+
+### 7. STRICT NEGATIVE INSTRUCTIONS
+[Or "PAGAR PEMBATAS & LARANGAN KETAT" if output language is Indonesian. A strict, uncompromising list of forbidden elements, antipatterns, artifacts, and distortions, beginning with "Do not:" or "Dilarang:".]
+- Do not: [Specific forbidden element 1]
+- Do not: [Specific forbidden element 2]
+- Do not: [Specific forbidden element 3]
+- Do not: [Specific forbidden element 4]
+- Do not: [Specific forbidden element 5]
+
+### 8. FINAL OUTPUT REQUIREMENTS
+[Or "PERSYARATAN OUTPUT AKHIR" if output language is Indonesian. Defines strict precedence and execution directive.]
+**PRIORITY ORDER:**
+1. [Highest priority hierarchy requirement]
+2. [Second priority requirement]
+3. [Third priority requirement]
+4. [Fourth priority requirement]
+5. [Fifth priority requirement]
+6. [Sixth priority requirement]
+7. [Seventh priority requirement]
+
+**FINAL DIRECTIVE:**
+[A single definitive, unyielding closing sentence commanding flawless execution with zero compromise.]
+
+CRITICAL EXECUTION MANDATES:
+1. DYNAMIC & ADAPTIVE: Adapt the headings, subheadings, terminology, and technical metrics to the specific domain analyzed from the OPTIMIZED REQUEST (e.g. Photography/Image Generation -> Optics, Camera, Lighting, Textures; Software/Coding -> Architecture, Tech Stack, Invariants, Type Safety; Writing/Editorial -> Narrative Structure, Cadence, Tone; Business/Marketing -> Hook, Value Prop, CTA; Data Analysis -> Metric Taxonomy, Causality, Statistical Rigor).
+2. NEVER FORCE IRRELEVANT CATEGORIES: Do NOT include camera optics in a software prompt or database schemas in a portrait prompt. Be deeply domain-relevant.
+3. 100% RETENTION: Retain all parameters, requirements, context, and instructions from the OPTIMIZED REQUEST. Do not drop or dilute any important constraints.
+4. LANGUAGE COHERENCE: If the target output language is Indonesian or detected as Indonesian, use Indonesian headings and terms (e.g. ### 7. PAGAR PEMBATAS & LARANGAN KETAT, ### 8. PERSYARATAN OUTPUT AKHIR, **URUTAN PRIORITAS:**, **DIREKTIF AKHIR:**, etc.). If English, use English.
+5. STRICT OUTPUT: Output ONLY the complete master prompt text. Zero conversational meta-commentary, introductory pleasantries ("Here is your prompt:"), or concluding remarks.`;
         const userParts = [];
-        if (images2 && images2.length > 0) {
-          for (const img of images2) {
+        if (images && images.length > 0) {
+          for (const img of images) {
             if (img.base64Data && img.mimeType) {
               userParts.push({
                 inlineData: {
@@ -709,7 +690,7 @@ ADDITIONAL CONTEXT (IF RELEVANT):
 - Mode: ${mode}
 - Language: ${outputLang}
 - Style: ${promptStyle === "Custom" ? `Custom (${customStyle})` : promptStyle}
-${images2 && images2.length > 0 ? `- Reference Images: ${images2.length} image(s) attached for visual grounding.
+${images && images.length > 0 ? `- Reference Images: ${images.length} image(s) attached for visual grounding.
 ` : ""}
 
 Please execute the Universal Adaptive Refinement and output ONLY the final, definitive, production-grade master prompt.`;
