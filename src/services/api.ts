@@ -58,11 +58,16 @@ export function setActiveProvider(provider: AIProviderId): void {
 }
 
 /**
- * Get API Key for a specific provider.
+ * Get API Key for a specific provider and optional model.
  */
-export function getProviderApiKey(provider: AIProviderId): string {
+export function getProviderApiKey(provider: AIProviderId, modelId?: string): string {
   try {
     if (provider === 'gemini-3.8-flash') {
+      const activeModel = modelId || getSelectedGeminiModel();
+      const modelSpecificKey = localStorage.getItem(`prompt_refiner_api_key_${activeModel}`);
+      if (modelSpecificKey && modelSpecificKey.trim()) {
+        return modelSpecificKey.trim();
+      }
       return localStorage.getItem(GEMINI_38_API_KEY_STORAGE_KEY) || '';
     } else {
       return localStorage.getItem(PCTCE_STUDIO_API_KEY_STORAGE_KEY) || '';
@@ -73,19 +78,26 @@ export function getProviderApiKey(provider: AIProviderId): string {
 }
 
 /**
- * Save API Key for a specific provider.
+ * Save API Key for a specific provider and optional model.
  */
-export function saveProviderApiKey(provider: AIProviderId, key: string): void {
+export function saveProviderApiKey(provider: AIProviderId, key: string, modelId?: string): void {
   try {
-    const storageKey =
-      provider === 'gemini-3.8-flash'
-        ? GEMINI_38_API_KEY_STORAGE_KEY
-        : PCTCE_STUDIO_API_KEY_STORAGE_KEY;
-
-    if (key.trim()) {
-      localStorage.setItem(storageKey, key.trim());
+    const trimmed = key.trim();
+    if (provider === 'gemini-3.8-flash') {
+      const activeModel = modelId || getSelectedGeminiModel();
+      if (trimmed) {
+        localStorage.setItem(`prompt_refiner_api_key_${activeModel}`, trimmed);
+        localStorage.setItem(GEMINI_38_API_KEY_STORAGE_KEY, trimmed);
+      } else {
+        localStorage.removeItem(`prompt_refiner_api_key_${activeModel}`);
+        localStorage.removeItem(GEMINI_38_API_KEY_STORAGE_KEY);
+      }
     } else {
-      localStorage.removeItem(storageKey);
+      if (trimmed) {
+        localStorage.setItem(PCTCE_STUDIO_API_KEY_STORAGE_KEY, trimmed);
+      } else {
+        localStorage.removeItem(PCTCE_STUDIO_API_KEY_STORAGE_KEY);
+      }
     }
   } catch (e) {
     console.error('Failed to save provider API key', e);
@@ -93,15 +105,17 @@ export function saveProviderApiKey(provider: AIProviderId, key: string): void {
 }
 
 /**
- * Clear API Key for a specific provider.
+ * Clear API Key for a specific provider and optional model.
  */
-export function clearProviderApiKey(provider: AIProviderId): void {
+export function clearProviderApiKey(provider: AIProviderId, modelId?: string): void {
   try {
-    const storageKey =
-      provider === 'gemini-3.8-flash'
-        ? GEMINI_38_API_KEY_STORAGE_KEY
-        : PCTCE_STUDIO_API_KEY_STORAGE_KEY;
-    localStorage.removeItem(storageKey);
+    if (provider === 'gemini-3.8-flash') {
+      const activeModel = modelId || getSelectedGeminiModel();
+      localStorage.removeItem(`prompt_refiner_api_key_${activeModel}`);
+      localStorage.removeItem(GEMINI_38_API_KEY_STORAGE_KEY);
+    } else {
+      localStorage.removeItem(PCTCE_STUDIO_API_KEY_STORAGE_KEY);
+    }
   } catch (e) {
     console.error('Failed to clear provider API key', e);
   }

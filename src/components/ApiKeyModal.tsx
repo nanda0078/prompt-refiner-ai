@@ -37,8 +37,9 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
     if (isOpen) {
       const active = getActiveProvider();
       setSelectedProvider(active);
-      setSelectedModel(getSelectedGeminiModel());
-      setApiKey(getProviderApiKey(active));
+      const currentModel = getSelectedGeminiModel();
+      setSelectedModel(currentModel);
+      setApiKey(getProviderApiKey(active, currentModel));
       setTestResult(null);
       setSaveSuccess(false);
       checkServerStatus().then((status) => {
@@ -59,13 +60,14 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
   const handleModelChange = (modelId: string) => {
     setSelectedModel(modelId);
     setSelectedGeminiModel(modelId);
+    setApiKey(getProviderApiKey(selectedProvider, modelId));
     setTestResult(null);
     setSaveSuccess(false);
   };
 
   const handleSave = () => {
     setActiveProvider(selectedProvider);
-    saveProviderApiKey(selectedProvider, apiKey);
+    saveProviderApiKey(selectedProvider, apiKey, selectedModel);
     if (selectedProvider === 'gemini-3.8-flash') {
       setSelectedGeminiModel(selectedModel);
     }
@@ -75,7 +77,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
   };
 
   const handleClear = () => {
-    clearProviderApiKey(selectedProvider);
+    clearProviderApiKey(selectedProvider, selectedModel);
     setApiKey('');
     setTestResult(null);
     onApiKeyUpdated();
@@ -95,6 +97,13 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
     } finally {
       setIsTesting(false);
     }
+  };
+
+  const activeModelOption = GEMINI_MODEL_OPTIONS.find((m) => m.id === selectedModel) || {
+    id: selectedModel,
+    name: selectedModel,
+    badge: '',
+    description: '',
   };
 
   return (
@@ -146,11 +155,11 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
                   <div className="flex items-center justify-between mb-1">
                     <span className="font-bold text-xs text-gray-900 dark:text-white flex items-center gap-1.5">
                       <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
-                      Gemini API (gemini-3.8-flash)
+                      Gemini API ({activeModelOption.name})
                     </span>
                   </div>
                   <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-snug">
-                    Google Gemini API langsung menggunakan model gemini-3.8-flash (BYOK).
+                    Google Gemini API langsung menggunakan {activeModelOption.name} (BYOK).
                   </p>
                 </div>
                 <div className="mt-2.5 flex items-center justify-between">
@@ -242,6 +251,12 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
                             className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${
                               opt.id === 'gemini-3.8-flash'
                                 ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60'
+                                : opt.id === 'gemini-3.5-flash'
+                                ? 'bg-blue-100 text-blue-800 dark:bg-blue-950/70 dark:text-blue-300 border border-blue-200 dark:border-blue-800/60'
+                                : opt.id === 'gemini-2.5-flash'
+                                ? 'bg-cyan-100 text-cyan-800 dark:bg-cyan-950/70 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-800/60'
+                                : opt.id === 'gemini-2.5-pro'
+                                ? 'bg-purple-100 text-purple-800 dark:bg-purple-950/70 dark:text-purple-300 border border-purple-200 dark:border-purple-800/60'
                                 : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
                             }`}
                           >
@@ -266,7 +281,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
               <div className="flex items-center gap-2">
                 <span className="font-semibold text-gray-900 dark:text-white">
                   {selectedProvider === 'gemini-3.8-flash'
-                    ? 'Status Gemini 3.8 Flash:'
+                    ? `Status ${activeModelOption.name}:`
                     : 'Status Engine AI Studio PCTCE+O:'}
                 </span>
                 {selectedProvider === 'gemini-3.8-flash' ? (
@@ -295,7 +310,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
               </div>
               <p className="text-[11px] text-gray-500 dark:text-gray-400">
                 {selectedProvider === 'gemini-3.8-flash'
-                  ? 'Model gemini-3.8-flash terhubung langsung ke Google Cloud AI. Masukkan Gemini API Key pribadi (BYOK) untuk aktivasi.'
+                  ? `Model ${selectedModel} terhubung langsung ke Google Cloud AI. Masukkan Gemini API Key pribadi (BYOK) untuk aktivasi.`
                   : serverHasKey
                   ? 'Gemini API Key server terdeteksi aktif. Anda bisa langsung menggunakannya atau memasukkan kunci kustom jika ingin menimpanya.'
                   : 'Engine PCTCE+O lokal siap pakai (bebas kuota). Jika ingin menggunakan server eksternal, masukkan API Key Anda di bawah ini.'}
@@ -307,7 +322,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
           <div className="space-y-1.5">
             <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300">
               {selectedProvider === 'gemini-3.8-flash'
-                ? 'GOOGLE GEMINI API KEY (BYOK UNTUK GEMINI-3.8-FLASH)'
+                ? `GOOGLE GEMINI API KEY (BYOK UNTUK ${activeModelOption.name.toUpperCase()})`
                 : 'KUNCI API AI STUDIO KUSTOM (OPSIONAL)'}
             </label>
             <div className="relative">
