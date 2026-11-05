@@ -132,6 +132,12 @@ export const GEMINI_MODEL_OPTIONS: GeminiModelOption[] = [
     description: 'Generasi terbaru dengan penalaran tinggi, latensi ultra-rendah & konteks luas.',
   },
   {
+    id: 'gemini-3.5-flash',
+    name: 'Gemini 3.5 Flash',
+    badge: 'Cepat & Cerdas',
+    description: 'Model generasi 3.5 dengan kecepatan tinggi, efisiensi tinggi & penalaran adaptif.',
+  },
+  {
     id: 'gemini-2.5-flash',
     name: 'Gemini 2.5 Flash',
     badge: 'Stabil',
