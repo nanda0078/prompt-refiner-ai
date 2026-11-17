@@ -85,7 +85,24 @@ export const GEMINI_CONFIG: GeminiConfig = {
   apiVersion: 'v1beta',
 };
 
-export type AIProviderId = 'gemini-3.8-flash' | 'pctce-o-studio';
+export type AIProviderId = 'gemini-3.8-flash' | 'pctce-o-studio' | 'crowllm';
+
+export interface CrowLLMConfig {
+  baseUrl: string;
+  apiKey: string;
+  modelId: string;
+}
+
+export const CROWLLM_DEFAULT_CONFIG: CrowLLMConfig = {
+  baseUrl: 'https://crowllm.com/v1',
+  apiKey: '',
+  modelId: '',
+};
+
+export interface FallbackConfig {
+  enabled: boolean;
+  secondaryProvider: AIProviderId;
+}
 
 export interface AIProviderConfig {
   id: AIProviderId;
@@ -137,9 +154,15 @@ export const GEMINI_MODEL_OPTIONS: GeminiModelOption[] = [
 export const AI_PROVIDERS: AIProviderConfig[] = [
   {
     id: 'gemini-3.8-flash',
-    name: 'Gemini API (gemini-3.8-flash)',
+    name: 'Google Gemini',
     model: 'gemini-3.8-flash',
-    description: 'Google Gemini API langsung menggunakan model gemini-3.8-flash (BYOK - Bring Your Own Key).',
+    description: 'Google Gemini API resmi dengan model canggih (gemini-3.8-flash, 3.5-flash, dsb).',
+  },
+  {
+    id: 'crowllm',
+    name: 'CrowLLM',
+    model: 'custom',
+    description: 'CrowLLM OpenAI-Compatible API Gateway (https://crowllm.com/v1).',
   },
   {
     id: 'pctce-o-studio',

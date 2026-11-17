@@ -3,6 +3,13 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { GoogleGenAI } from '@google/genai';
+import {
+  fetchCrowLLMModels,
+  testCrowLLMConnection,
+  refineWithCrowLLM,
+  maskCrowLLMKey,
+  normalizeBaseUrl,
+} from './src/services/crowllmAdapter';
 
 dotenv.config();
 
@@ -202,6 +209,30 @@ async function generateContentWithRetry(
   throw lastError;
 }
 
+// Endpoint to load models from CrowLLM
+app.post('/api/crowllm/models', async (req, res) => {
+  try {
+    const { baseUrl = 'https://crowllm.com/v1', apiKey } = req.body;
+    const headerKey = (req.headers['x-crowllm-api-key'] as string) || apiKey;
+    const cleanUrl = (req.headers['x-crowllm-base-url'] as string) || baseUrl;
+
+    if (!headerKey || !headerKey.trim()) {
+      return res.status(400).json({
+        success: false,
+        error: 'API Key CrowLLM belum diisi.',
+      });
+    }
+
+    const result = await fetchCrowLLMModels(cleanUrl, headerKey);
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({
+      success: false,
+      error: err?.message || 'Gagal memuat model dari CrowLLM.',
+    });
+  }
+});
+
 // Test connection endpoint
 app.post('/api/test-connection', async (req, res) => {
   const customKey = (req.headers['x-gemini-api-key'] as string) || req.body?.apiKey;
@@ -209,6 +240,16 @@ app.post('/api/test-connection', async (req, res) => {
   const targetModel = (req.headers['x-gemini-model'] as string) || req.body?.model || GEMINI_CONFIG.model;
 
   console.log(`[API /api/test-connection] Testing connection for provider: ${provider} | Target Model: ${targetModel}`);
+
+  // CrowLLM Provider branch
+  if (provider === 'crowllm') {
+    const crowKey = (req.headers['x-crowllm-api-key'] as string) || req.body?.apiKey || customKey;
+    const crowBaseUrl = (req.headers['x-crowllm-base-url'] as string) || req.body?.baseUrl || 'https://crowllm.com/v1';
+    const crowModel = (req.headers['x-crowllm-model'] as string) || req.body?.model || targetModel;
+
+    const result = await testCrowLLMConnection(crowBaseUrl, crowKey, crowModel);
+    return res.status(result.success ? 200 : 400).json(result);
+  }
 
   try {
     const ai = getGeminiClient(customKey);
@@ -536,10 +577,7 @@ app.post('/api/refine', async (req, res) => {
     let rawMarkdown = '';
     let usedModel = '';
 
-    // If a valid Gemini API Key is available, try invoking Gemini
-    if (ai) {
-      try {
-        const systemInstruction = `You are a combined Prompt Engineering Expert & Master Prompt Refiner.
+    const systemInstruction = `You are a combined Prompt Engineering Expert & Master Prompt Refiner.
 
 ROLE & MISSION:
 Your only job is to:
@@ -569,7 +607,7 @@ OUTPUT FORMAT (STRICT MARKDOWN):
 1. [Question 1]
 2. [Question 2]`;
 
-        const userMessage = `OPTIMIZATION SPECIFICATIONS:
+    const userMessage = `OPTIMIZATION SPECIFICATIONS:
 - Target AI: ${targetAI}
 - Optimization Mode: ${mode}
 - Output Language: ${outputLang}
@@ -581,6 +619,31 @@ ${prompt}
 """
 
 Please execute the Lyra 4D workflow and PCTCE+O framework to produce the final refined master prompt. Follow the strict four-section markdown format.`;
+
+    // CrowLLM Provider execution
+    if (provider === 'crowllm') {
+      const crowKey = (req.headers['x-crowllm-api-key'] as string) || req.body?.apiKey || customKey;
+      const crowBaseUrl = (req.headers['x-crowllm-base-url'] as string) || req.body?.baseUrl || 'https://crowllm.com/v1';
+      const crowModel = (req.headers['x-crowllm-model'] as string) || req.body?.model || requestedModel;
+
+      if (crowKey && crowModel) {
+        try {
+          console.log(`[API /api/refine] Refining with CrowLLM (${crowModel}) at ${crowBaseUrl}...`);
+          rawMarkdown = await refineWithCrowLLM(crowBaseUrl, crowKey, crowModel, systemInstruction, userMessage);
+          usedModel = `CrowLLM (${crowModel})`;
+        } catch (crowError: any) {
+          console.warn('[API /api/refine] CrowLLM execution failed. Seamlessly engaging local PCTCE+O fallback engine:', crowError?.message);
+          const fallback = generateLocalPctceRefinement(prompt, targetAI, mode, outputLang, promptStyle, customStyle);
+          rawMarkdown = fallback.rawMarkdown;
+          usedModel = `CrowLLM (${crowModel}) [Local PCTCE+O Fallback]`;
+        }
+      } else {
+        const fallback = generateLocalPctceRefinement(prompt, targetAI, mode, outputLang, promptStyle, customStyle);
+        rawMarkdown = fallback.rawMarkdown;
+        usedModel = 'CrowLLM [Local PCTCE+O Fallback - Missing Key/Model]';
+      }
+    } else if (ai) {
+      try {
 
         const { response, usedModel: modelName } = await generateContentWithRetry(ai, {
           model: requestedModel,
