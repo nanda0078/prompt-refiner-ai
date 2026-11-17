@@ -36,6 +36,7 @@ export const Header: React.FC<HeaderProps> = ({
               <h1 className="font-extrabold text-lg sm:text-xl tracking-tight text-gray-900 dark:text-white">
                 PROMPT REFINER <span className="bg-gradient-to-r from-indigo-500 to-cyan-500 bg-clip-text text-transparent">AI</span>
               </h1>
+              <span className="inline-flex items-center text-[10px] sm:text-xs font-bold px-1.5 py-0.5 rounded-md bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-700/60 shadow-2xs">V2.0</span>
               <span className="hidden sm:inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60">
                 <Cpu className="w-3 h-3" />
                 Prompt Engineering
